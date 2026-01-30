@@ -1,17 +1,17 @@
 """
-Oxygen atom typing logic.
+Oxygen atom typing logic - OPTIMIZED VERSION.
 """
 
-from typing import Set, Optional
-import pandas as pd
+from typing import Set, Optional, Tuple
 
 from src.atom_typing.typers.base import ElementTyper
 from src.atom_typing.data_classes import MoleculeData, NeighborInfo
 
+
 class OxygenTyper(ElementTyper):
     """Atom typing logic for oxygen atoms."""
     
-    def type_atom(self, idx, row, mol_data: MoleculeData) -> str:
+    def type_atom(self, idx: int, row, mol_data: MoleculeData) -> Tuple[str, Optional[str]]:
         neighbors = mol_data.get_neighbors(idx)
         biggest_ring = mol_data.ring_info.get_biggest_ring(idx)
         total_neighbors = row.total_neighbors
@@ -23,7 +23,9 @@ class OxygenTyper(ElementTyper):
             return atom_type, 'sp2'
         
         if total_neighbors == 2:
-            atom_type, hybridization = self._type_double_bond(idx, row, neighbors, biggest_ring, mol_data)
+            atom_type, hybridization = self._type_double_bond(
+                idx, row, neighbors, biggest_ring, mol_data
+            )
             return atom_type, hybridization
         
         return f"{row.sybyl_type}_{heavy_neighbors}", None
@@ -62,8 +64,9 @@ class OxygenTyper(ElementTyper):
         
         return 'O.2_1'
     
-    def _type_double_bond(self, idx, row, neighbors: NeighborInfo,
-                          biggest_ring: Optional[Set[int]], mol_data: MoleculeData) -> str:
+    def _type_double_bond(self, idx: int, row, neighbors: NeighborInfo,
+                          biggest_ring: Optional[Set[int]], 
+                          mol_data: MoleculeData) -> Tuple[str, str]:
         """Type oxygen with two neighbors (ether, alcohol, etc.)."""
         num_hydrogens = row.num_hydrogens
         
@@ -78,18 +81,23 @@ class OxygenTyper(ElementTyper):
                 return 'O.ph_1', 'sp2'  # Phenol
         
         if num_hydrogens == 0:
-            atom_type, hybridization = self._type_ether_like(idx, neighbors, biggest_ring, mol_data)
+            atom_type, hybridization = self._type_ether_like(
+                idx, neighbors, biggest_ring, mol_data
+            )
             return atom_type, hybridization
         
         return 'O.3_2', 'sp3'
     
     def _type_ether_like(self, idx: int, neighbors: NeighborInfo,
-                         biggest_ring: Optional[Set[int]], mol_data: MoleculeData) -> str:
+                         biggest_ring: Optional[Set[int]], 
+                         mol_data: MoleculeData) -> Tuple[str, str]:
         """Type ether-like oxygen (no hydrogens, two heavy neighbors)."""
+        elements_set = set(neighbors.elements)
+        
         # Phosphate/sulfate ester
-        if 'P' in neighbors.elements:
+        if 'P' in elements_set:
             return 'O.3p_2', 'sp3'
-        if 'S' in neighbors.elements:
+        if 'S' in elements_set:
             return 'O.3s_2', 'sp3'
         
         neighbor_valence = sum(neighbors.valences)
@@ -116,10 +124,10 @@ class OxygenTyper(ElementTyper):
         for list_idx, c_idx in enumerate(neighbors.indices):
             if neighbors.valences[list_idx] == 3:
                 ring = mol_data.ring_info.get_biggest_ring(c_idx)
-                if ring is not None and len(ring) in [5, 6]:
+                if ring is not None and len(ring) in (5, 6):
                     return 'O.3eta_2', 'sp2'
 
-        if 'N' in neighbors.elements:
+        if 'N' in elements_set:
             return 'O.3n_2', 'sp3'
         
         return 'O.3_2', 'sp3'

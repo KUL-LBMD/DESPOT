@@ -1,18 +1,20 @@
 """
-Nitrogen atom typing logic.
+Nitrogen atom typing logic - OPTIMIZED VERSION.
+Key optimizations:
+- Uses pre-computed numpy arrays instead of df.loc
 """
 
-from typing import Set, Optional
+from typing import Set, Optional, Tuple
 import numpy as np
-import pandas as pd
 
 from src.atom_typing.typers.base import ElementTyper
 from src.atom_typing.data_classes import MoleculeData, NeighborInfo
 
+
 class NitrogenTyper(ElementTyper):
     """Atom typing logic for nitrogen atoms."""
     
-    def type_atom(self, idx, row, mol_data: MoleculeData) -> str:
+    def type_atom(self, idx: int, row, mol_data: MoleculeData) -> Tuple[str, Optional[str]]:
         neighbors = mol_data.get_neighbors(idx)
         biggest_ring = mol_data.ring_info.get_biggest_ring(idx)
         heavy_neighbors = row.heavy_neighbors
@@ -29,15 +31,17 @@ class NitrogenTyper(ElementTyper):
             return f'N.4_{heavy_neighbors}', 'sp3'  # Quaternary amine
         
         # Check functional groups
-        atom_type, hybridization = self._check_functional_groups(idx, row, neighbors, biggest_ring, mol_data)
+        atom_type, hybridization = self._check_functional_groups(
+            idx, row, neighbors, biggest_ring, mol_data
+        )
         if atom_type:
             return atom_type, hybridization
         
         return f"{row.sybyl_type}_{heavy_neighbors}", None
     
-    def _check_functional_groups(self, idx, row, neighbors: NeighborInfo,
+    def _check_functional_groups(self, idx: int, row, neighbors: NeighborInfo,
                                   biggest_ring: Optional[Set[int]], 
-                                  mol_data: MoleculeData) -> Optional[str]:
+                                  mol_data: MoleculeData) -> Tuple[Optional[str], Optional[str]]:
         """Check for various nitrogen functional groups."""
         heavy_neighbors = row.heavy_neighbors
         
@@ -82,7 +86,9 @@ class NitrogenTyper(ElementTyper):
         
         # Ring systems
         if biggest_ring is not None:
-            atom_type, hybridization = self._type_ring_nitrogen(idx, row, neighbors, biggest_ring, mol_data)
+            atom_type, hybridization = self._type_ring_nitrogen(
+                idx, row, neighbors, biggest_ring, mol_data
+            )
             return atom_type, hybridization
         
         # N-N coupling
@@ -98,7 +104,8 @@ class NitrogenTyper(ElementTyper):
         
         return f'{row.sybyl_type}_{heavy_neighbors}', 'sp3'
     
-    def _type_n_oxide(self, row, neighbors: NeighborInfo, heavy_neighbors: int) -> str:
+    def _type_n_oxide(self, row, neighbors: NeighborInfo, 
+                      heavy_neighbors: int) -> Tuple[str, str]:
         """Type N-O containing nitrogen."""
         # Check for hydroxamic acid
         if any(x == 'C' and y == 1 and z == 3 
@@ -113,17 +120,21 @@ class NitrogenTyper(ElementTyper):
 
         return f'N.oh_{heavy_neighbors}', hybridization  # Nitroso or N-oxide
     
-    def _type_ring_nitrogen(self, idx, row, neighbors: NeighborInfo,
-                            ring: Set[int], mol_data: MoleculeData) -> str:
-        """Type ring nitrogen (pyridine, pyrrole, etc.)."""
-        # Try to get valence column, fall back to total_neighbors
-        ring_valences = mol_data.df.loc[list(ring), 'total_neighbors'].tolist()
+    def _type_ring_nitrogen(self, idx: int, row, neighbors: NeighborInfo,
+                            ring: Set[int], mol_data: MoleculeData) -> Tuple[str, str]:
+        """Type ring nitrogen (pyridine, pyrrole, etc.).
+        
+        OPTIMIZED: Uses pre-computed numpy arrays instead of df.loc
+        """
+        # Use pre-computed array instead of df.loc
+        ring_list = list(ring)
+        ring_valences = mol_data._total_neighbors[ring_list]
         
         ring_length = len(ring)
         heavy_neighbors = row.heavy_neighbors
         
         # Aromatic ring (no sp3 atoms)
-        if all(x < 4 for x in ring_valences):
+        if np.all(ring_valences < 4):
             non_c = next((x for x in neighbors.elements if x != 'C'), None)
             suffix = 'p' if row.total_neighbors != 2 else ''  # Protonated
             
@@ -138,7 +149,8 @@ class NitrogenTyper(ElementTyper):
             hybridization = 'sp3'
         return f'N.r{ring_length}_{heavy_neighbors}', hybridization
     
-    def _type_amine(self, row, idx: int, neighbors: NeighborInfo, mol_data: MoleculeData) -> str:
+    def _type_amine(self, row, idx: int, neighbors: NeighborInfo, 
+                    mol_data: MoleculeData) -> Tuple[str, str]:
         """Type amine nitrogen with carbon neighbors only."""
         heavy_neighbors = row.heavy_neighbors
         
@@ -146,7 +158,7 @@ class NitrogenTyper(ElementTyper):
         for list_idx, c_idx in enumerate(neighbors.indices):
             if neighbors.valences[list_idx] == 3:
                 ring = mol_data.ring_info.atom_to_rings.get(c_idx, None)
-                if ring is not None and len(ring) in [5, 6]:
+                if ring is not None and len(ring) in (5, 6):
                     return f'N.aa_{heavy_neighbors}', 'sp2'  # Aromatic amine
         
         # Check hybridization by bond order

@@ -1,16 +1,17 @@
 """
-Phosphorus atom typing logic.
+Phosphorus atom typing logic - OPTIMIZED VERSION.
 """
 
-import pandas as pd
+from typing import Optional, Tuple
 
 from src.atom_typing.typers.base import ElementTyper
-from src.atom_typing.data_classes import MoleculeData, NeighborInfo
+from src.atom_typing.data_classes import MoleculeData
+
 
 class PhosphorusTyper(ElementTyper):
     """Atom typing logic for phosphorus atoms."""
     
-    def type_atom(self, idx, row, mol_data: MoleculeData) -> str:
+    def type_atom(self, idx: int, row, mol_data: MoleculeData) -> Tuple[str, Optional[str]]:
         """
         Type phosphorus based on oxygen neighbor count.
         

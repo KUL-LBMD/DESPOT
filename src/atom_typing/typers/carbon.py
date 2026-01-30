@@ -1,18 +1,21 @@
 """
-Carbon atom typing logic.
+Carbon atom typing logic - OPTIMIZED VERSION.
+Key optimizations:
+- Uses pre-computed numpy arrays from MoleculeData
+- Avoids DataFrame.loc in hot paths
 """
 
-from typing import Set, Optional
+from typing import Set, Optional, Tuple
 from collections import Counter
-import pandas as pd
 
 from src.atom_typing.typers.base import ElementTyper, RingPositionCalculator
 from src.atom_typing.data_classes import MoleculeData, NeighborInfo
 
+
 class CarbonTyper(ElementTyper):
     """Atom typing logic for carbon atoms."""
     
-    def type_atom(self, idx, row, mol_data: MoleculeData) -> str:
+    def type_atom(self, idx: int, row, mol_data: MoleculeData) -> Tuple[str, Optional[str]]:
         neighbors = mol_data.get_neighbors(idx)
         biggest_ring = mol_data.ring_info.get_biggest_ring(idx)
         total_neighbors = row.total_neighbors
@@ -81,22 +84,28 @@ class CarbonTyper(ElementTyper):
     
     def _type_sp2_ring(self, idx: int, neighbors: NeighborInfo, ring: Set[int], 
                        heavy_neighbors: int, mol_data: MoleculeData) -> str:
-        """Type ring sp2 carbon (aromatic)."""
-        ring_elements = mol_data.df.loc[list(ring), 'element'].tolist()
-        ring_valences = mol_data.df.loc[list(ring), 'total_neighbors'].tolist()
+        """Type ring sp2 carbon (aromatic).
+        
+        OPTIMIZED: Uses pre-computed numpy arrays instead of DataFrame.loc
+        """
+        # Use pre-computed arrays for fast access
+        ring_list = list(ring)
+        ring_elements = mol_data._elements[ring_list].tolist()
+        ring_valences = mol_data._total_neighbors[ring_list]
         ring_length = len(ring)
 
         # Check for aromaticity
         if all(x < 4 for x in ring_valences):    
             if ring_length == 6:
-                if set(ring_elements) == {'C'}:
+                ring_elements_set = set(ring_elements)
+                if ring_elements_set == {'C'}:
                     # Pure benzene ring
                     if set(neighbors.elements) == {'C'}:
                         return f'C.ar6_{heavy_neighbors}'
                     return f'C.ar6x_{heavy_neighbors}'  # Substituted
             
                 # Heteroaromatic - determine position relative to heteroatom
-                hetero_indices = [i for i in ring if mol_data.df.loc[i, 'element'] != 'C']
+                hetero_indices = [i for i in ring_list if mol_data._elements[i] != 'C']
                 ring_graph = mol_data.ring_info.get_ring_graph(ring)
                 position = RingPositionCalculator.get_position(idx, ring, hetero_indices, ring_graph)
                 return f'C.ar6{position[0]}_{heavy_neighbors}'
@@ -124,7 +133,7 @@ class CarbonTyper(ElementTyper):
         
         if elements_set == {'C'}:
             return f'C.3c_{heavy_neighbors}'  # Alkane
-        if 'N' in elements_set and not 'O' in elements_set:
+        if 'N' in elements_set and 'O' not in elements_set:
             return f'C.3n_{heavy_neighbors}'  # Amine-adjacent
         if 'O' in elements_set:
             o_idx = neighbors.elements.index('O')
@@ -133,11 +142,10 @@ class CarbonTyper(ElementTyper):
             return f'C.oh_{heavy_neighbors}'  # Alcohol
         if 'S' in elements_set:
             return f'C.3s_{heavy_neighbors}'
-
         if 'P' in elements_set:
             return f'C.3p_{heavy_neighbors}'
 
-        for element in ['F', 'Cl', 'I', 'Br']:
+        for element in ('F', 'Cl', 'I', 'Br'):
             if element in elements_set:
                 return f'C.3hal_{heavy_neighbors}'
         

@@ -3,17 +3,18 @@ Element-specific atom typers using the Strategy pattern.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Tuple
 import pandas as pd
 import networkx as nx
 
 from src.atom_typing.data_classes import MoleculeData, NeighborInfo
 
+
 class ElementTyper(ABC):
     """Base class for element-specific atom typing."""
     
     @abstractmethod
-    def type_atom(self, idx, row, mol_data: MoleculeData) -> str:
+    def type_atom(self, idx: int, row, mol_data: MoleculeData) -> Tuple[str, Optional[str]]:
         """
         Determine the atom type for a given atom.
         
@@ -21,17 +22,18 @@ class ElementTyper(ABC):
         ----------
         idx : int
             Atom index in the molecule DataFrame
-        row : pd.Series
-            Row data for this atom
+        row : object
+            Row data for this atom (can be namedtuple or proxy object)
         mol_data : MoleculeData
             Full molecule data container
         
         Returns
         -------
-        str
-            Atom type string
+        Tuple[str, Optional[str]]
+            Atom type string and hybridization
         """
         pass
+
 
 class RingPositionCalculator:
     """Efficiently calculate ring positions (ortho/meta/para) using pre-built graphs."""

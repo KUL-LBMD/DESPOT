@@ -1,17 +1,17 @@
 """
-Sulfur atom typing logic.
+Sulfur atom typing logic - OPTIMIZED VERSION.
 """
 
-from typing import Set, Optional
-import pandas as pd
+from typing import Set, Optional, Tuple
 
 from src.atom_typing.typers.base import ElementTyper
 from src.atom_typing.data_classes import MoleculeData, NeighborInfo
 
+
 class SulfurTyper(ElementTyper):
     """Atom typing logic for sulfur atoms."""
     
-    def type_atom(self, idx, row, mol_data: MoleculeData) -> str:
+    def type_atom(self, idx: int, row, mol_data: MoleculeData) -> Tuple[str, Optional[str]]:
         neighbors = mol_data.get_neighbors(idx)
         biggest_ring = mol_data.ring_info.get_biggest_ring(idx)
         total_neighbors = row.total_neighbors
@@ -19,12 +19,12 @@ class SulfurTyper(ElementTyper):
         
         # Thione (C=S)
         if total_neighbors == 1:
-            atom_type = f"S.2{neighbors.elements[0].lower()}_1"
+            neighbor_elem = neighbors.elements[0].lower()
             if neighbors.elements[0] == 'P':
                 hybridization = 'sp3'
             else:
                 hybridization = 'sp2'
-            return f"S.2{neighbors.elements[0].lower()}_1", hybridization
+            return f"S.2{neighbor_elem}_1", hybridization
         
         # Thiol
         if total_neighbors == 2 and heavy_neighbors == 1:
@@ -46,8 +46,10 @@ class SulfurTyper(ElementTyper):
         return f"{row.sybyl_type}_{heavy_neighbors}", 'sp3'
     
     def _type_divalent(self, neighbors: NeighborInfo, 
-                       biggest_ring: Optional[Set[int]]) -> str:
+                       biggest_ring: Optional[Set[int]]) -> Tuple[str, str]:
         """Type divalent sulfur (two heavy neighbors, no hydrogens)."""
+        elements_set = set(neighbors.elements)
+        
         # Ring sulfur
         if biggest_ring is not None:
             if any(x == 4 for x in neighbors.valences):
@@ -55,8 +57,8 @@ class SulfurTyper(ElementTyper):
             return 'S.ar_2', 'sp2'  # Aromatic (thiophene)
         
         # Acyclic
-        if 'O' in neighbors.elements:
+        if 'O' in elements_set:
             return 'S.o_2', 'sp3'  # Sulfoxide-type
-        if 'S' in neighbors.elements:
+        if 'S' in elements_set:
             return 'S.s_2', 'sp3'  # Disulfide
         return 'S.3_2', 'sp3'  # Thioether
