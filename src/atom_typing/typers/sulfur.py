@@ -18,7 +18,7 @@ class SulfurTyper(ElementTyper):
         heavy_neighbors = row.heavy_neighbors
         
         # Thione (C=S)
-        if total_neighbors == 1:
+        if total_neighbors == 1 and heavy_neighbors == 1:
             neighbor_elem = neighbors.elements[0].lower()
             if neighbors.elements[0] == 'P':
                 hybridization = 'sp3'

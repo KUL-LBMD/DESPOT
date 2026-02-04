@@ -20,6 +20,9 @@ class CarbonTyper(ElementTyper):
         biggest_ring = mol_data.ring_info.get_biggest_ring(idx)
         total_neighbors = row.total_neighbors
         heavy_neighbors = row.heavy_neighbors
+
+        if heavy_neighbors == 0:
+            return f"{row.sybyl_type}_{heavy_neighbors}", None
         
         # SP hybridization
         if total_neighbors == 2:

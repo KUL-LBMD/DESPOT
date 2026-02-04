@@ -2,9 +2,26 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree
 import os
+import itertools
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
+from tqdm import tqdm
+import traceback
 
 from src.config import DATA_DIR
 from src.atom_typing.parse_mol2 import MolConverter
+
+def _convert_file(filename):
+    """Convert a single protein-ligand pair. Runs in worker process."""
+    converter = MolConverter()
+
+    prot_df = converter.convert_mol2(
+        DATA_DIR / 'CROWN' / 'processed_mol2' / 'receptor' / filename
+    )
+    lig_df = converter.convert_mol2(
+        DATA_DIR / 'CROWN' / 'processed_mol2' / 'ligand' / filename
+    )
+
+    return filename, prot_df, lig_df
 
 class DESPOT_Counter:
     """
@@ -23,7 +40,7 @@ class DESPOT_Counter:
 
         # Set types lists for ligand atoms and protein atoms
 
-        counts_df = pd.read_csv(DATA_DIR / 'atom_type_counts.csv')
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' /'atom_type_counts.csv')
 
         self.types_list_1d = (
             counts_df.loc[
@@ -172,24 +189,52 @@ class DESPOT_Counter:
 
                         self.bin_arr_3d[p_idx, l_idx, r_idx, theta_idx, phi_idx] += 1
 
-    def find_interactions(self):
+    def find_interactions(self, n_workers=4, max_queued=8):
         """
-        Loop over all .csv files in input_dir to identify protein-ligand interactions
+        Loop over all files with parallel MOL2 conversion feeding a processing queue.
         """
-
         num_files = len(self.file_list)
+        
+        from concurrent.futures import ProcessPoolExecutor
+        import multiprocessing as mp
+        ctx = mp.get_context('spawn')
+        
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=ctx) as executor:
+            pending = set()
+            file_iter = iter(self.file_list)
+            
+            for f in itertools.islice(file_iter, max_queued):
+                pending.add(executor.submit(_convert_file, f))
+            
+            with tqdm(total=num_files, desc="Processing structures", unit="file") as pbar:
+                while pending:
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    
+                    for future in done:
+                        try:
+                            filename, prot_df, lig_df = future.result()
+                            
+                            if prot_df is not None and lig_df is not None:
+                                self._process_interaction_pair(prot_df, lig_df)
+                                self._process_interaction_pair(lig_df, prot_df)
+                                pbar.set_postfix_str(filename[:20])
+                            else:
+                                pbar.write(f"{filename} (skipped)")
+                                
+                        except Exception as e:
+                            pbar.write(f"Error processing {filename}:\n{traceback.format_exc()}")
+                        
+                        pbar.update(1)
+                        
+                        try:
+                            next_file = next(file_iter)
+                            pending.add(executor.submit(_convert_file, next_file))
+                        except StopIteration:
+                            pass
 
-        for i, filename in enumerate(self.file_list):
-
-            # Convert MOL2 files to prot_df and lig_df
-            prot_df = self.converter.convert_mol2(DATA_DIR / 'CROWN' / 'processed_mol2' / 'receptor' / filename)
-            lig_df = self.converter.convert_mol2(DATA_DIR / 'CROWN' / 'processed_mol2' / 'ligand' / filename)
-
-            # Symmetric interaction counting
-            self._process_interaction_pair(prot_df, lig_df)
-            self._process_interaction_pair(lig_df, prot_df)
-
-            print(f'{i+1} / {num_files} done')
-
-        np.savez_compressed(DATA_DIR / 'potentials' / 'despot_counts.npz', 
-            arr_1d = self.bin_arr_1d, arr_2d = self.bin_arr_2d, arr_3d = self.bin_arr_3d)
+        np.savez_compressed(
+            DATA_DIR / 'potentials' / 'despot_counts.npz',
+            arr_1d=self.bin_arr_1d,
+            arr_2d=self.bin_arr_2d,
+            arr_3d=self.bin_arr_3d
+        )

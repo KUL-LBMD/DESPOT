@@ -196,11 +196,6 @@ class MolConverter:
         reader = MOL2Reader(file_path)
         df, adj_matrix = reader.read()
 
-        # Control: a residue should not have more than 100 heavy atoms
-        subset = df[df['sybyl_type'] != 'H']
-        if subset['subst_id'].value_counts().gt(100).any():
-            return None
-            
         # Process molecule
         mol_data = self.processor.process(df, adj_matrix)        
         if mol_data is None:
@@ -218,7 +213,7 @@ class MolConverter:
 
         # Select output columns
         cols = [
-            'atom_id', 'atom_name', 'atom_type', 'sybyl_type', 'subst_id', 
+            'atom_id', 'element', 'atom_name', 'atom_type', 'sybyl_type', 'subst_id', 
             'subst_name', 'charge', 'hybridization', 'heavy_neighbors', 
             'num_hydrogens', 'x', 'y', 'z', 
             'v1_x', 'v1_y', 'v1_z', 'v2_x', 'v2_y', 'v2_z', 'v3_x', 'v3_y', 'v3_z'

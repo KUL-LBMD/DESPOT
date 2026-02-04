@@ -18,7 +18,7 @@ class OxygenTyper(ElementTyper):
         heavy_neighbors = row.heavy_neighbors
         
         # Assume correct protonation states
-        if total_neighbors == 1:
+        if total_neighbors == 1 and heavy_neighbors == 1:
             atom_type = self._type_single_bond(idx, neighbors, mol_data)
             return atom_type, 'sp2'
         
