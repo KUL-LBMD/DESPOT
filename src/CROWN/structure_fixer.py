@@ -638,7 +638,7 @@ class ComplexFixer:
             io = PDBIO()
             io.set_structure(structure)
 
-            output_path = f'{DATA_DIR}/CROWN/raw_pdb/unfiltered_pli/{basename}.pdb'
+            output_path = f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb'
             io.save(output_path)
 
     def wrapper(self, num_cores = 1):
@@ -654,6 +654,6 @@ class ComplexFixer:
         system_id_list = self.filtered_subset['system_id'].tolist()
         ligand_id_list = self.filtered_subset['ligand_instance_chain'].tolist()
 
-        os.makedirs(f'{DATA_DIR}/CROWN/raw_pdb/unfiltered_pli', exist_ok = True)
+        os.makedirs(f'{DATA_DIR}/CROWN/raw_pdb', exist_ok = True)
 
         Parallel(n_jobs = num_cores, verbose = 10)(delayed(self.preprocess_file)(system_id, ligand_id) for system_id, ligand_id in zip(system_id_list, ligand_id_list))

@@ -186,7 +186,7 @@ class PLI_Filter:
 
 			for row in rows.itertuples(index = False):
 				basename = row.basename
-				file_path = f'{DATA_DIR}/CROWN/raw_pdb/unfiltered_pli/{basename}.pdb'
+				file_path = f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb'
 				if not os.path.isfile(file_path):
 					continue
 
@@ -254,15 +254,6 @@ class PLI_Filter:
 		return pli_filtered_subset
 
 	def wrapper(self, maxdev_threshold = 0.1, max_count = 500):
-		#maxdev_subset = self.prune_maxdev(maxdev_threshold = maxdev_threshold)
-		#pli_filtered_subset = self.prune_ccd(maxdev_subset, max_count = max_count)
-		pli_filtered_subset = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
+		maxdev_subset = self.prune_maxdev(maxdev_threshold = maxdev_threshold)
+		pli_filtered_subset = self.prune_ccd(maxdev_subset, max_count = max_count)
 
-		basename_list = pli_filtered_subset['basename'].tolist()
-
-		src_dir = f'{DATA_DIR}/CROWN/raw_pdb/unfiltered_pli'
-		dest_dir = f'{DATA_DIR}/CROWN/raw_pdb/filtered_pli'
-		os.makedirs(dest_dir, exist_ok = True)
-
-		for basename in basename_list:
-			shutil.copy(f'{src_dir}/{basename}.pdb', f'{dest_dir}/{basename}.pdb')
