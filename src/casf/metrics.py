@@ -16,7 +16,7 @@ def get_scoring_values(name_list):
         new_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_scorepower.csv')
         new_df.rename(columns={'score': f'{name}_score'}, inplace=True)
         new_df[f'{name}_score'] = -1 * new_df[f'{name}_score']
-        df = pd.merge(df, new_df, on='subdir')
+        df = pd.merge(df, new_df, on='pdb_id')
 
     return df
 
@@ -36,7 +36,7 @@ def get_ranking_values(name_list):
         new_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_scorepower.csv')
         new_df.rename(columns={'score': f'{name}_score'}, inplace=True)
         new_df[f'{name}_score'] = -1 * new_df[f'{name}_score']
-        df = pd.merge(df, new_df, on='subdir')
+        df = pd.merge(df, new_df, on='pdb_id')
 
     unique_targets = df['target'].unique()
     n_targets = len(unique_targets)
@@ -71,26 +71,24 @@ def get_docking_values(name_list):
         
         if merged_df is None:
             # First CSV: keep code and rmsd as reference
-            merged_df = df[['code', 'rmsd', f'{name}_score']].copy()
+            merged_df = df.copy()
         else:
             # Subsequent CSVs: merge on 'code' to ensure proper alignment
             merged_df = pd.merge(
                 merged_df, 
-                df[['code', f'{name}_score']], 
-                on='code', 
+                df[['pdb_id', 'pose_id', f'{name}_score']], 
+                on=['pdb_id', 'pose_id'],
                 how='inner'
             )
-    
-    merged_df['target'] = merged_df['code'].str[:4]
     
     # Build col_list in the same order as name_list for consistent indexing
     score_cols = [f'{name}_score' for name in name_list]
     
-    unique_targets = merged_df['target'].unique()
+    unique_targets = merged_df['pdb_id'].unique()
     n_targets = len(unique_targets)
 
     for group in unique_targets:
-        subset = merged_df[merged_df['target'] == group].copy()
+        subset = merged_df[merged_df['pdb_id'] == group].copy()
         
         for i, score_col in enumerate(score_cols):
             # Sort by score (descending) and find rank of poses with RMSD < 2.0
@@ -114,8 +112,8 @@ def get_docking_values(name_list):
     spearman_arr = np.zeros((S, 285, 9))
 
     for i, name in enumerate(name_list):
-        for j, group in enumerate(merged_df['target'].unique()):
-            subset = merged_df[merged_df['target'] == group].copy()
+        for j, group in enumerate(merged_df['pdb_id'].unique()):
+            subset = merged_df[merged_df['pdb_id'] == group].copy()
             for k, threshold in enumerate(threshold_list):
                 subsubset = subset[subset['rmsd'] < threshold].copy()
                 if len(subsubset) > 0:
@@ -144,55 +142,37 @@ def get_screening_values(name_list):
     merged_df = None
     
     for name in name_list:
-        df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_screeningpower.csv', index_col=0)
-        flat_df = df.reset_index().melt(id_vars='index', var_name='ligand', value_name=f'{name}_score')
+        flat_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_screeningpower.csv', index_col=0)
+        flat_df.rename(columns = {'score': f'{name}_score'}, inplace = True)
         flat_df[f'{name}_score'] = -1 * flat_df[f'{name}_score']
         
         if merged_df is None:
-            merged_df = flat_df[['index', 'ligand', f'{name}_score']].copy()
-            merged_df.rename(columns={'index': 'protein'}, inplace=True)
+            merged_df = flat_df.copy()
         else:
-            flat_df.rename(columns={'index': 'protein'}, inplace=True)
             merged_df = pd.merge(
                 merged_df,
-                flat_df[['protein', 'ligand', f'{name}_score']],
-                on=['protein', 'ligand'],
+                flat_df[['pdb_id', 'ligand_id', f'{name}_score']],
+                on=['pdb_id', 'ligand_id'],
                 how='inner'
             )
-    
-    merged_df['ligand'] = merged_df['ligand'].str[:4]
     
     # Build score column list in same order as name_list
     score_cols = [f'{name}_score' for name in name_list]
 
-    # Read target dict
-    file_path = f"{DATA_DIR}/CASF-2016/power_screening/TargetInfo.dat"
-    target_dict = {}
-    with open(file_path, "r") as f:
-        lines = f.readlines()
-    for line in lines[1:]:
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split()
-        T = parts[0]
-        Ls = parts[1:]
-        target_dict[T] = Ls
-
     # 4.1: Forward success rate
-    unique_proteins = merged_df['protein'].unique()
+    unique_proteins = merged_df['pdb_id'].unique()
     n_proteins = len(unique_proteins)
     
     for group in unique_proteins:
-        subset = merged_df[merged_df['protein'] == group].copy()
+        subset = merged_df[merged_df['pdb_id'] == group].copy()
         target_list = target_dict[group]
         for i, score_col in enumerate(score_cols):
             subset_sorted = subset.copy()
             subset_sorted.sort_values(by=[score_col], ascending=False, inplace=True, ignore_index=True)
             # Take best-scoring pose per protein-ligand pair
-            subset_sorted.drop_duplicates(subset=['protein', 'ligand'], keep='first', inplace=True, ignore_index=True)
+            subset_sorted.drop_duplicates(subset=['pdb_id', 'ligand_id'], keep='first', inplace=True, ignore_index=True)
             # Find highest position of 1 positive
-            real_idx = subset_sorted.index[subset_sorted['ligand'].isin(target_list)].tolist()[0]
+            real_idx = subset_sorted['is_binder'].idxmax()
             real_pos = (real_idx + 1) / len(subset_sorted)
 
             if real_pos < 0.05:
@@ -203,31 +183,17 @@ def get_screening_values(name_list):
                 forward_top_arr[i, 0] += 1 / n_proteins
 
     ### 4.2: Reverse success rate ###
-    file_path = f"{DATA_DIR}/CASF-2016/power_screening/LigandInfo.dat"
-    ligand_dict = {}
-    with open(file_path, "r") as f:
-        lines = f.readlines()
-    for line in lines[1:]:
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split()
-        L = parts[0]
-        group = parts[1]
-        Ts = parts[2:]
-        ligand_dict[L] = Ts
-
-    unique_ligands = merged_df['ligand'].unique()
+    unique_ligands = merged_df['ligand_id'].unique()
     n_ligands = len(unique_ligands)
 
     for group in unique_ligands:
-        subset = merged_df[merged_df['ligand'] == group].copy()
+        subset = merged_df[merged_df['ligand_id'] == group].copy()
         target_list = ligand_dict[group]
         for i, score_col in enumerate(score_cols):
             subset_sorted = subset.copy()
             subset_sorted.sort_values(by=[score_col], ascending=False, inplace=True, ignore_index=True)
-            subset_sorted.drop_duplicates(subset=['protein', 'ligand'], keep='first', inplace=True, ignore_index=True)
-            real_idx = subset_sorted.index[subset_sorted['protein'].isin(target_list)].tolist()[0]
+            subset_sorted.drop_duplicates(subset=['pdb_id', 'ligand_id'], keep='first', inplace=True, ignore_index=True)
+            real_idx = subset_sorted['is_binder'].idxmax()
             real_pos = (real_idx + 1) / len(subset_sorted)
 
             if real_pos < 0.1:
@@ -246,50 +212,31 @@ def get_enrichment_factors(df, name_list):
     ef_arr [S, 57, 3]: enrichment factors for 57 targets at 3 different levels.
     Row order matches name_list order.
     """
-    # Read target dict
-    file_path = f"{DATA_DIR}/CASF-2016/power_screening/TargetInfo.dat"
-    target_dict = {}
-    with open(file_path, "r") as f:
-        lines = f.readlines()
-    for line in lines[1:]:
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split()
-        T = parts[0]
-        Ls = parts[1:]
-        target_dict[T] = Ls
     
     threshold_list = [0.01, 0.02, 0.05]
-    unique_proteins = df['protein'].unique()
+    unique_proteins = df['pdb_id'].unique()
     num_groups = len(unique_proteins)
     S = len(name_list)
     ef_arr = np.zeros((S, num_groups, len(threshold_list)))
 
-    # FIX: Use the passed name_list parameter, NOT DataFrame columns!
     score_cols = [f'{name}_score' for name in name_list]
 
     for j, group in enumerate(unique_proteins):
         lig_list = target_dict[group]
-        subset = df[df['protein'] == group].copy()
-        for i, name in enumerate(score_cols):  # FIX: iterate using score_cols
+        subset = df[df['pdb_id'] == group].copy()
+        for i, name in enumerate(score_cols):
             subset_sorted = subset.copy()
             subset_sorted.sort_values(by=[name], ascending=False, inplace=True, ignore_index=True)
-            subset_sorted.drop_duplicates(subset=['protein', 'ligand'], keep='first', inplace=True, ignore_index=True)
-            subset_sorted['active'] = subset_sorted['ligand'].isin(lig_list).astype(int)
+            subset_sorted.drop_duplicates(subset=['pdb_id', 'ligand_id'], keep='first', inplace=True, ignore_index=True)
 
             for k, threshold in enumerate(threshold_list):
-                total_actives = subset_sorted['active'].sum()
+                total_actives = subset_sorted['is_binder'].sum()
                 total_entries = len(subset_sorted)
                 subset_entries = int(threshold * total_entries)
                 subsubset = subset_sorted.head(subset_entries).copy()
-                subset_actives = subsubset['active'].sum()
+                subset_actives = subsubset['is_binder'].sum()
 
-                # Avoid division by zero
-                if total_actives > 0 and subset_entries > 0:
-                    ef = (subset_actives / total_actives) / (subset_entries / total_entries)
-                else:
-                    ef = 0.0
+                ef = (subset_actives / total_actives) / (subset_entries / total_entries)
                 ef_arr[i, j, k] = ef
 
     return ef_arr

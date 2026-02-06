@@ -5,7 +5,6 @@ import os
 import itertools
 from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from tqdm import tqdm
-import traceback
 
 from src.config import DATA_DIR
 from src.atom_typing.parse_mol2 import MolConverter
@@ -222,7 +221,7 @@ class DESPOT_Counter:
                                 pbar.write(f"{filename} (skipped)")
                                 
                         except Exception as e:
-                            pbar.write(f"Error processing {filename}:\n{traceback.format_exc()}")
+                            pass
                         
                         pbar.update(1)
                         

@@ -30,13 +30,18 @@ def run_scoring():
 		score2 = np.sum(scorer2.score_complex(prot_df, lig_df))
 		score3 = np.sum(scorer3.score_complex(prot_df, lig_df))
 
-		score_dict = {'subdir': subdir, 'score1': score1, 'score2': score2, 'score3': score3}
+		score_dict = {'pdb_id': subdir, 'score1': score1, 'score2': score2, 'score3': score3}
 		score_list_of_dicts.append(score_dict)
 
 	score_df = pd.DataFrame(score_list_of_dicts)
-	df1 = score_df[['subdir', 'score1']].copy().rename(columns = {'score1': 'score'})
-	df2 = score_df[['subdir', 'score2']].copy().rename(columns = {'score2': 'score'})
-	df3 = score_df[['subdir', 'score3']].copy().rename(columns = {'score3': 'score'})
+
+	# Add logKa information
+	aff_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/power_scoring/CoreSet.dat', sep=r"\s+")[['pdb_id', 'logKa']]
+	score_df = pd.merge(score_df, aff_df, on = 'pdb_id')
+
+	df1 = score_df[['pdb_id', 'logKa', 'score1']].copy().rename(columns = {'score1': 'score'})
+	df2 = score_df[['pdb_id', 'logKa', 'score2']].copy().rename(columns = {'score2': 'score'})
+	df3 = score_df[['pdb_id', 'logKa', 'score3']].copy().rename(columns = {'score3': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_scorepower.csv', index = False, float_format = '%.4f')
 	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_scorepower.csv', index = False, float_format = '%.4f')
@@ -90,16 +95,15 @@ def run_docking():
 		df_list.append(subdir_df)
 
 	dock_df = pd.concat(df_list, axis = 0)
-	df1 = dock_df[['code', 'score1', 'rmsd']].copy().rename(columns = {'score1': 'score'})
-	df2 = dock_df[['code', 'score2', 'rmsd']].copy().rename(columns = {'score2': 'score'})
-	df3 = dock_df[['code', 'score3', 'rmsd']].copy().rename(columns = {'score3': 'score'})
+	dock_df['pdb_id'] = dock_df['code'].str.split('_').str[0]
+	dock_df['pose_id'] = dock_df['code'].str.split('_').str[1]
+	df1 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score1']].copy().rename(columns = {'score1': 'score'})
+	df2 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score2']].copy().rename(columns = {'score2': 'score'})
+	df3 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score3']].copy().rename(columns = {'score3': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_dockingpower.csv', index = False, float_format = '%.4f')
 	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_dockingpower.csv', index = False, float_format = '%.4f')
 	df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_dockingpower.csv', index = False, float_format = '%.4f')
-
-from joblib import Parallel, delayed
-import math
 
 def run_screening(n_jobs=-1):
     print('Starting screening benchmark')
@@ -162,6 +166,38 @@ def run_screening(n_jobs=-1):
     df2 = pd.DataFrame(score_arr[1,:,:], index=target_list, columns=molecule_list)
     df3 = pd.DataFrame(score_arr[2,:,:], index=target_list, columns=molecule_list)
 
-    df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_screeningpower.csv', float_format='%.4f')
-    df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_screeningpower.csv', float_format='%.4f')
-    df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_screeningpower.csv', float_format='%.4f')
+    file_path = f"{DATA_DIR}/CASF-2016/power_screening/TargetInfo.dat"
+    target_dict = {}
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+    for line in lines[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        T = parts[0]
+        Ls = parts[1:]
+        target_dict[T] = Ls
+
+    df_list = [df1, df2, df3]
+    name_list = ['despot', 'despot_iso', 'despot_ds']
+
+    for df, name in zip(df_list, name_list):
+        df_long = (
+            df
+            .reset_index()                     # turn index into a column
+            .rename(columns={"index": "pdb_id"})
+            .melt(
+                id_vars="pdb_id",             
+                var_name="ligand_id",
+                value_name="score"            
+            )
+        )
+
+        df_long['ligand_id'] = df_long['ligand_id'].str.split('_').str[0]
+        df_long['is_binder'] = df_long.apply(
+            lambda r: int(r['ligand_id'] in target_dict.get(r['pdb_id'], [])),
+            axis=1
+        )
+
+        df_long.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_screeningpower.csv', float_format='%.4f')

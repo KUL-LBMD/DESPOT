@@ -26,9 +26,9 @@ NAME_LIST_CLEAN = ['DESPOT', 'DESPOT-Iso', 'DESPOT-DS',
 if __name__ == '__main__':
 
 	### Step 1: run DESPOT on all CASF entries and store data ###
-	#run_scoring()
+	run_scoring()
 	#run_docking()
-	#run_screening(n_jobs = 8)
+	run_screening(n_jobs = 8)
 
 	### Step 2: Get benchmark metrics ###
 	score_df = get_scoring_values(NAME_LIST)
