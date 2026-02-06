@@ -147,13 +147,11 @@ def get_screening_values(name_list):
         flat_df.rename(columns = {'score': f'{name}_score'}, inplace = True)
         flat_df[f'{name}_score'] = -1 * flat_df[f'{name}_score']
 
-        print(flat_df)
-
-        # 🔧 FIX: keep only the *most negative* score per (pdb_id, ligand_id)
+        # 🔧 FIX: keep only the *most positive* score per (pdb_id, ligand_id)
         flat_df = (
             flat_df
             .groupby(['pdb_id', 'ligand_id', 'is_binder'], as_index=False)[f'{name}_score']
-            .min()
+            .max()
         )
         
         if merged_df is None:
@@ -173,8 +171,6 @@ def get_screening_values(name_list):
     unique_proteins = merged_df['pdb_id'].unique()
     n_proteins = len(unique_proteins)
 
-    print(merged_df.columns)
-    
     for group in unique_proteins:
         subset = merged_df[merged_df['pdb_id'] == group].copy()
         for i, score_col in enumerate(score_cols):

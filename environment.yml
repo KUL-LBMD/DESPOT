@@ -21,6 +21,7 @@ dependencies:
   - tqdm
   - einops
   - networkx
+  - python-dotenv
   - pip
   - pip:
       - scikit-posthocs
