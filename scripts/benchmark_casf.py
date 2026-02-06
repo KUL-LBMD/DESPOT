@@ -26,16 +26,25 @@ NAME_LIST_CLEAN = ['DESPOT', 'DESPOT-Iso', 'DESPOT-DS',
 if __name__ == '__main__':
 
 	### Step 1: run DESPOT on all CASF entries and store data ###
-	run_scoring()
+	#run_scoring()
 	#run_docking()
-	run_screening(n_jobs = 8)
+	#run_screening(n_jobs = 8)
 
 	### Step 2: Get benchmark metrics ###
 	score_df = get_scoring_values(NAME_LIST)
+	print(score_df)
+
 	rank_spearman_arr = get_ranking_values(NAME_LIST)
+	print(rank_spearman_arr)
+
 	dock_top_arr, dock_spearman_thresholds = get_docking_values(NAME_LIST)
+	print(dock_top_arr)
+
 	screen_df, forward_top_arr, reverse_top_arr = get_screening_values(NAME_LIST)
+	print(screen_df)
+
 	ef_arr = get_enrichment_factors(screen_df, NAME_LIST)
+	print(ef_arr)
 
 	### Step 3: Compute and plot statistics ###
 	generate_combined_figure('casf_combined.pdf', NAME_LIST, NAME_LIST_CLEAN, score_df, rank_spearman_arr, dock_top_arr, dock_spearman_thresholds,

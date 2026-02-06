@@ -423,7 +423,7 @@ class DESPOT_DS_Builder:
     def counts_to_prob(self):
         """P(r | p, l) = n(p,l,r) / sum_r{n(p,l,r)}"""
 
-        denom_arr = np.sum(self.rho_1d, axis = 2, keepdims = True) # [p,l,r]
+        denom_arr = np.sum(self.rho_1d, axis = 2, keepdims = True) + 1e-12 # [p,l,r]
         self.prob = self.rho_1d / denom_arr
 
         for i,j in self.zero_combos:

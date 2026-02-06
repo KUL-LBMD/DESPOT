@@ -16,7 +16,7 @@ def get_scoring_values(name_list):
         new_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_scorepower.csv')
         new_df.rename(columns={'score': f'{name}_score'}, inplace=True)
         new_df[f'{name}_score'] = -1 * new_df[f'{name}_score']
-        df = pd.merge(df, new_df, on='pdb_id')
+        df = pd.merge(df, new_df, on= ['pdb_id', 'logKa'])
 
     return df
 
@@ -36,7 +36,7 @@ def get_ranking_values(name_list):
         new_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_scorepower.csv')
         new_df.rename(columns={'score': f'{name}_score'}, inplace=True)
         new_df[f'{name}_score'] = -1 * new_df[f'{name}_score']
-        df = pd.merge(df, new_df, on='pdb_id')
+        df = pd.merge(df, new_df, on= ['pdb_id', 'logKa'])
 
     unique_targets = df['target'].unique()
     n_targets = len(unique_targets)
@@ -68,7 +68,8 @@ def get_docking_values(name_list):
         df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_dockingpower.csv')
         df.rename(columns={'score': f'{name}_score'}, inplace=True)
         df[f'{name}_score'] = -1 * df[f'{name}_score']
-        
+        df['pose_id'] = df['pose_id'].astype(str)
+
         if merged_df is None:
             # First CSV: keep code and rmsd as reference
             merged_df = df.copy()
@@ -142,9 +143,18 @@ def get_screening_values(name_list):
     merged_df = None
     
     for name in name_list:
-        flat_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_screeningpower.csv', index_col=0)
+        flat_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_screeningpower.csv')
         flat_df.rename(columns = {'score': f'{name}_score'}, inplace = True)
         flat_df[f'{name}_score'] = -1 * flat_df[f'{name}_score']
+
+        print(flat_df)
+
+        # 🔧 FIX: keep only the *most negative* score per (pdb_id, ligand_id)
+        flat_df = (
+            flat_df
+            .groupby(['pdb_id', 'ligand_id', 'is_binder'], as_index=False)[f'{name}_score']
+            .min()
+        )
         
         if merged_df is None:
             merged_df = flat_df.copy()
@@ -162,10 +172,11 @@ def get_screening_values(name_list):
     # 4.1: Forward success rate
     unique_proteins = merged_df['pdb_id'].unique()
     n_proteins = len(unique_proteins)
+
+    print(merged_df.columns)
     
     for group in unique_proteins:
         subset = merged_df[merged_df['pdb_id'] == group].copy()
-        target_list = target_dict[group]
         for i, score_col in enumerate(score_cols):
             subset_sorted = subset.copy()
             subset_sorted.sort_values(by=[score_col], ascending=False, inplace=True, ignore_index=True)
@@ -188,7 +199,6 @@ def get_screening_values(name_list):
 
     for group in unique_ligands:
         subset = merged_df[merged_df['ligand_id'] == group].copy()
-        target_list = ligand_dict[group]
         for i, score_col in enumerate(score_cols):
             subset_sorted = subset.copy()
             subset_sorted.sort_values(by=[score_col], ascending=False, inplace=True, ignore_index=True)
@@ -222,7 +232,6 @@ def get_enrichment_factors(df, name_list):
     score_cols = [f'{name}_score' for name in name_list]
 
     for j, group in enumerate(unique_proteins):
-        lig_list = target_dict[group]
         subset = df[df['pdb_id'] == group].copy()
         for i, name in enumerate(score_cols):
             subset_sorted = subset.copy()
