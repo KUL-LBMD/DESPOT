@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdDetermineBonds
+from scipy.spatial import KDTree
 from pdbfixer import PDBFixer
 from openmmforcefields.generators import SystemGenerator
 from openmm.app import PDBFile, Modeller, ForceField, Simulation
@@ -15,6 +16,8 @@ from openff.toolkit import Molecule
 from openff.units import unit as openff_unit
 from openmm import CustomExternalForce, LangevinMiddleIntegrator, unit, Platform
 import logging
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # DEFAULT PARAMETERS
@@ -53,6 +56,7 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 					subprocess.run(['obabel', '-isdf', sdf_path, '-opdb', '-O', f'{tmp_dir}/temp.pdb'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
 					mol = Chem.MolFromPDBFile(f'{tmp_dir}/temp.pdb', removeHs=False, sanitize=False)
 					if mol is None:
+						logger.error(f"Failed to load ligand from {sdf_path} using all fallback methods.")
 						return
 
 					# FIX OXYGEN FORMAL CHARGES, used to be problem in NAD+ that was deprotonated.
@@ -66,13 +70,12 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 							continue
 
 						# Single-bonded O attached to C should have formal charge = -1
-						for neighbor in atom.GetNeighbors():
-							amount_of_neighbors = sum(1 for neighbor in atom.GetNeighbors())
-							if amount_of_neighbors == 1:
-								bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
-								if (neighbor.GetAtomicNum() == 6 and bond.GetBondType() == Chem.BondType.SINGLE and atom.GetFormalCharge() == 0):
-									atom.SetFormalCharge(-1)
-									break
+						num_neighbors = atom.GetDegree()
+						if num_neighbors == 1:
+							neighbor = atom.GetNeighbors()[0]
+							bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
+							if (neighbor.GetAtomicNum() in (6, 15, 16) and bond.GetBondType() == Chem.BondType.SINGLE and atom.GetFormalCharge() == 0):
+								atom.SetFormalCharge(-1)
 
 					formal_charge = Chem.GetFormalCharge(mol)
 					rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
@@ -95,6 +98,7 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	writer = Chem.SDWriter(out_sdf)
 	writer.write(protonated_h)
 	writer.close()
+	logger.info(f"Protonated ligand written to {out_sdf}")
 
 def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 	"""
@@ -111,10 +115,10 @@ def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 		residues = list(chain.residues())
 		protein_residues = [r for r in residues if r.name in STANDARD_AMINO_ACIDS]
 
-	if protein_residues:
-		# Add ACE at start, NME at end
-		seq = ['ACE'] + [r.name for r in protein_residues] + ['NME']
-		chain_sequences[chain.id] = seq
+		if protein_residues:
+			# Add ACE at start, NME at end
+			seq = ['ACE'] + [r.name for r in protein_residues] + ['NME']
+			chain_sequences[chain.id] = seq
 
 	# Now write modified PDB with SEQRES records
 	with open(input_pdb, 'r') as f_in, open(output_pdb, 'w') as f_out:
@@ -154,6 +158,7 @@ def refine_system(input_dir):
 				basename = filename[:-4]
 				protonate_ligand(f'{input_dir}/{filename}', f'{tmp_dir}/{basename}_h.sdf', ph = PH)
 				if not os.path.isfile(f'{tmp_dir}/{basename}_h.sdf'):
+					logger.error(f"Protonation failed for {filename} — aborting refinement.")
 					return
 
 		# ====================================================================
@@ -219,7 +224,7 @@ def refine_system(input_dir):
 			forcefields=['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml'], # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
 			small_molecule_forcefield='openff-2.2.0',
 			molecules=ligand_molecules,
-			cache=str(tmp_dir / f'{input_dir}_db.json')
+			cache=f'{tmp_dir}/{input_dir}_db.json')
 		)
 
 		system = system_generator.create_system(modeller.topology)
@@ -236,34 +241,16 @@ def refine_system(input_dir):
 					ligand_atom_indices.add(atom.index)
 
 		positions = modeller.positions
-		mobile_residues = set()
-		mobile_atoms = set(ligand_atom_indices)
 
-		for residue in modeller.topology.residues():
-			if any(atom.index in ligand_atom_indices for atom in residue.atoms()):
-				mobile_residues.add(residue)
-                		continue
+		# Use KDTree for more efficient spatial lookup
+		all_positions_nm = np.array([positions[i].value_in_unit(unit.nanometer) for i in range(len(positions))])
+		ligand_indices_list = sorted(ligand_atom_indices)
+		ligand_positions_nm = all_positions_nm[ligand_indices_list]
+		ligand_tree = KDTree(ligand_positions_nm)
 
-			residue_is_mobile = False
-			for atom in residue.atoms():
-				atom_pos = np.array(positions[atom.index].value_in_unit(unit.nanometer))
-				for lig_idx in ligand_atom_indices:
-					lig_pos = np.array(positions[lig_idx].value_in_unit(unit.nanometer))
-					distance = np.linalg.norm(atom_pos - lig_pos)
-					if distance <= restraint_radius:
-						residue_is_mobile = True
-						break
-				if residue_is_mobile:
-					mobile_residues.add(residue)
-					break
-
-		for residue in mobile_residues:
-			for atom in residue.atoms():
-				mobile_atoms.add(atom.index)
-
-		total_atoms = modeller.topology.getNumAtoms(
-		restrained_atoms = total_atoms - len(mobile_atoms)
-		restrained_residues = sum(1 for r in modeller.topology.residues() if r not in mobile_residues)
+		distances, _ = ligand_tree.query(all_positions_nm, k=1)  # nearest ligand atom
+		mobile_mask = distances <= RESTRAINT_RADIUS
+		mobile_atoms = set(np.where(mobile_mask)[0].tolist()) # atom indices where distance smaller than restraint radius
 
 		# ====================================================================
                 # STEP 5: Add restraints to both mobile and non-mobile atoms
@@ -276,11 +263,11 @@ def refine_system(input_dir):
 		nonmobile_restraint.addPerParticleParameter("z0")
 
 		# Continuously differentiable energy term. Flat-bottom tethering with smoothstep function
-		# Energy, force and second derivative at r=0.25 are 0. 
+		# Energy, force and second derivative at r=0.25 are 0.
 		# Energy and force at 1.25 are 1, second derivative is 0.
 		mobile_restraint = CustomExternalForce('w*('
-			'step(r-0.25)*(1-step(r-1.25))*(3*(r-0.25)^5-8*(r-0.25)^4+6*r^3)' # [0.25, 1.25]
-			'+step(r-1.25)*r' # [1.25, +inf]
+			'step(r-0.25)*(1-step(r-1.25))*(3*(r-0.25)^5-8*(r-0.25)^4+6*(r-0.25)^3)' # [0.25, 1.25]
+			'+step(r-1.25)*(r-0.25)' # [1.25, +inf]
 			'); '
 			'r=sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)'
 		)
