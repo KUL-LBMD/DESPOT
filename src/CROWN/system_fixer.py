@@ -1,0 +1,467 @@
+"""
+split_system.py
+~~~~~~~~~~~~~~
+Read individual SDF files from a directory, merge them, match against a
+reference PDB, restore missing bonds by proximity, split into connected
+components, classify each by PDB residue name, and write:
+  - receptor_fixed.pdb        (PDB atoms *not* claimed by any ligand/cofactor)
+  - lig_fixed_{i}.sdf         (components whose PDB residue is "LIG")
+  - cof_fixed_{j}.sdf         (components with any other residue name)
+  - split_ligands.sdf          (all components in a single multi-entry SDF)
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from collections import defaultdict, deque
+from pathlib import Path
+import numpy as np
+from numpy.typing import NDArray
+import subprocess
+
+from src.config import DATA_DIR, SOURCE_DB_PATH
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
+log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class PipelineConfig:
+    """Tuneable parameters kept in one place."""
+
+    coord_match_tol: float = 0.05       # Å – tolerance for PDB ↔ SDF matching
+    proximity_bond_cutoff: float = 1.8   # Å – max distance for adding bonds
+    default_bond_line: str = "  1  0  0  0  0\n"  # single-bond SDF placeholder
+
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
+@dataclass
+class Atom:
+    x: float
+    y: float
+    z: float
+    element: str
+    raw_line: str  # original SDF atom line (preserves formatting)
+
+    @property
+    def coord(self) -> NDArray[np.float64]:
+        return np.array([self.x, self.y, self.z])
+
+    @property
+    def is_heavy(self) -> bool:
+        return self.element != "H"
+
+
+@dataclass
+class Bond:
+    atom1: int  # 1-indexed (SDF convention)
+    atom2: int
+    rest: str   # bond-type + stereo fields from the SDF line
+
+    def zero_indexed(self) -> tuple[int, int]:
+        return self.atom1 - 1, self.atom2 - 1
+
+    def canonical_pair(self) -> tuple[int, int]:
+        """Sorted 0-indexed pair – useful as a set key."""
+        a, b = self.zero_indexed()
+        return (min(a, b), max(a, b))
+
+
+@dataclass
+class Molecule:
+    atoms: list[Atom] = field(default_factory=list)
+    bonds: list[Bond] = field(default_factory=list)
+
+    # -- querying ----------------------------------------------------------
+
+    @property
+    def n_atoms(self) -> int:
+        return len(self.atoms)
+
+    @property
+    def n_bonds(self) -> int:
+        return len(self.bonds)
+
+    @property
+    def heavy_atoms(self) -> list[tuple[int, Atom]]:
+        """Return (index, atom) for every non-hydrogen atom."""
+        return [(i, a) for i, a in enumerate(self.atoms) if a.is_heavy]
+
+    @property
+    def coord_matrix(self) -> NDArray[np.float64]:
+        return np.array([[a.x, a.y, a.z] for a in self.atoms])
+
+    def existing_bond_pairs(self) -> set[tuple[int, int]]:
+        return {b.canonical_pair() for b in self.bonds}
+
+    # -- mutating ----------------------------------------------------------
+
+    def filter_by_coords(
+        self, ref_coords: NDArray[np.float64], tol: float
+    ) -> Molecule:
+        """Return a new Molecule containing only atoms within *tol* of
+        any point in *ref_coords*."""
+        kept: list[int] = []
+        for i, atom in enumerate(self.atoms):
+            dists = np.linalg.norm(ref_coords - atom.coord, axis=1)
+            if dists.min() < tol:
+                kept.append(i)
+
+        return self._subset(kept)
+
+    def add_proximity_bonds(self, cutoff: float, default_rest: str) -> int:
+        """Add single bonds between unbonded heavy atoms closer than
+        *cutoff* Å.  Returns the number of bonds added."""
+
+        ALLOWED_ELEMENTS = {'C', 'N', 'O', 'S', 'P', 'B'}
+
+        existing = self.existing_bond_pairs()
+        heavy = self.heavy_atoms
+        if not heavy:
+            return 0
+
+        idxs, atoms = zip(*heavy)
+        elements = [a.element for a in atoms]
+        coords = np.array([[a.x, a.y, a.z] for a in atoms])
+        dists = np.linalg.norm(
+            coords[:, None, :] - coords[None, :, :], axis=2
+        )
+
+        added = 0
+        for i in range(len(idxs)):
+            for j in range(i + 1, len(idxs)):
+                if dists[i, j] < cutoff and elements[i] in ALLOWED_ELEMENTS and elements[j] in ALLOWED_ELEMENTS:
+                    pair = (min(idxs[i], idxs[j]), max(idxs[i], idxs[j]))
+                    if pair not in existing:
+                        self.bonds.append(Bond(
+                            atom1=pair[0] + 1,
+                            atom2=pair[1] + 1,
+                            rest=default_rest,
+                        ))
+                        existing.add(pair)
+                        added += 1
+        return added
+
+    def connected_components(self) -> list[Molecule]:
+        """Split into one Molecule per connected component (BFS)."""
+        adj: dict[int, set[int]] = defaultdict(set)
+        for bond in self.bonds:
+            a, b = bond.zero_indexed()
+            adj[a].add(b)
+            adj[b].add(a)
+
+        visited = [False] * self.n_atoms
+        components: list[list[int]] = []
+
+        for start in range(self.n_atoms):
+            if visited[start]:
+                continue
+            queue = deque([start])
+            visited[start] = True
+            comp: list[int] = []
+            while queue:
+                node = queue.popleft()
+                comp.append(node)
+                for nb in adj[node]:
+                    if not visited[nb]:
+                        visited[nb] = True
+                        queue.append(nb)
+            components.append(sorted(comp))
+
+        return [self._subset(comp) for comp in components]
+
+    # -- combining ---------------------------------------------------------
+
+    @classmethod
+    def merge(cls, molecules: list[Molecule]) -> Molecule:
+        """Concatenate multiple Molecules into one, offsetting bond indices."""
+        all_atoms: list[Atom] = []
+        all_bonds: list[Bond] = []
+        offset = 0
+        for mol in molecules:
+            all_atoms.extend(mol.atoms)
+            for bond in mol.bonds:
+                all_bonds.append(Bond(
+                    atom1=bond.atom1 + offset,
+                    atom2=bond.atom2 + offset,
+                    rest=bond.rest,
+                ))
+            offset += mol.n_atoms
+        return cls(atoms=all_atoms, bonds=all_bonds)
+
+    # -- internal ----------------------------------------------------------
+
+    def _subset(self, indices: list[int]) -> Molecule:
+        """Build a new Molecule from a subset of atom indices, remapping
+        bond numbering accordingly."""
+        kept_set = set(indices)
+        old_to_new = {old: new for new, old in enumerate(indices)}
+
+        new_atoms = [self.atoms[i] for i in indices]
+        new_bonds = [
+            Bond(
+                atom1=old_to_new[b.atom1 - 1] + 1,
+                atom2=old_to_new[b.atom2 - 1] + 1,
+                rest=b.rest,
+            )
+            for b in self.bonds
+            if (b.atom1 - 1) in kept_set and (b.atom2 - 1) in kept_set
+        ]
+        return Molecule(atoms=new_atoms, bonds=new_bonds)
+
+
+# ---------------------------------------------------------------------------
+# I/O helpers
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PDBAtom:
+    """Lightweight representation of a heavy atom from a PDB file."""
+    coord: NDArray[np.float64]
+    resname: str
+
+
+def read_pdb_heavy_atoms(path: Path) -> list[PDBAtom]:
+    """Return heavy atoms with coordinates and residue names from a PDB."""
+    atoms: list[PDBAtom] = []
+    with open(path) as fh:
+        for line in fh:
+            if not line.startswith(("ATOM", "HETATM")):
+                continue
+            element = line[76:78].strip()
+            if not element:
+                element = line[12:16].strip().lstrip("0123456789")[0]
+            if element == "H":
+                continue
+            atoms.append(PDBAtom(
+                coord=np.array([
+                    float(line[30:38]),
+                    float(line[38:46]),
+                    float(line[46:54]),
+                ]),
+                resname=line[17:20].strip(),
+            ))
+    return atoms
+
+
+def pdb_coord_matrix(pdb_atoms: list[PDBAtom]) -> NDArray[np.float64]:
+    """Stack PDBAtom coordinates into an (N, 3) array."""
+    return np.array([a.coord for a in pdb_atoms])
+
+
+def read_pdb_lines(path: Path) -> list[str]:
+    """Return all lines of a PDB file (used for receptor filtering)."""
+    with open(path) as fh:
+        return fh.readlines()
+
+
+def read_sdf_v2000(path: Path) -> Molecule:
+    """Parse the first entry of a V2000 SDF file into a Molecule."""
+    lines = path.read_text().splitlines(keepends=True)
+
+    # Check if this is actually a proper V2000 file instead of V3000
+    if 'V3000' in lines[3]:
+        subprocess.run(['obabel', '-isdf', path, '-osdf', '-O', path], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+        lines = path.read_text().splitlines(keepends=True)
+
+    counts = lines[3]
+    n_atoms = int(counts[0:3])
+    n_bonds = int(counts[3:6])
+
+    atoms: list[Atom] = []
+    for i in range(4, 4 + n_atoms):
+        ln = lines[i]
+        atoms.append(Atom(
+            x=float(ln[0:10]),
+            y=float(ln[10:20]),
+            z=float(ln[20:30]),
+            element=ln[31:34].strip(),
+            raw_line=ln.rstrip("\n"),
+        ))
+
+    bonds: list[Bond] = []
+    for i in range(4 + n_atoms, 4 + n_atoms + n_bonds):
+        ln = lines[i]
+        bonds.append(Bond(
+            atom1=int(ln[0:3]),
+            atom2=int(ln[3:6]),
+            rest=ln[6:],
+        ))
+
+    return Molecule(atoms=atoms, bonds=bonds)
+
+
+def read_sdf_directory(directory: Path) -> Molecule:
+    """Read all .sdf files in *directory* and merge into a single Molecule.
+
+    Files are sorted by name for reproducibility.  Each file is parsed as a
+    single V2000 entry; bond indices are offset so the merged result is one
+    contiguous atom/bond table.
+    """
+    sdf_files = sorted(directory.glob("*.sdf"))
+    if not sdf_files:
+        raise FileNotFoundError(f"No .sdf files found in {directory}")
+
+    molecules: list[Molecule] = []
+    for sdf_path in sdf_files:
+        mol = read_sdf_v2000(sdf_path)
+        log.info("  %s → %d atoms, %d bonds", sdf_path.name, mol.n_atoms, mol.n_bonds)
+        molecules.append(mol)
+
+    merged = Molecule.merge(molecules)
+    log.info("Merged %d SDF files → %d atoms, %d bonds",
+             len(sdf_files), merged.n_atoms, merged.n_bonds)
+    return merged
+
+
+def write_sdf(molecules: list[Molecule], path: Path) -> None:
+    """Write one or more Molecules as separate entries in a single SDF."""
+    with open(path, "w") as fh:
+        for idx, mol in enumerate(molecules, start=1):
+            fh.write(f"molecule_{idx}\n")
+            fh.write("     split     3D\n")
+            fh.write("\n")
+            fh.write(
+                f"{mol.n_atoms:3d}{mol.n_bonds:3d}"
+                "  0  0  0  0  0  0  0  0999 V2000\n"
+            )
+            for atom in mol.atoms:
+                fh.write(atom.raw_line + "\n")
+            for bond in mol.bonds:
+                fh.write(f"{bond.atom1:3d}{bond.atom2:3d}{bond.rest}")
+            fh.write("M  END\n")
+            fh.write("$$$$\n")
+    log.info("Wrote %d entries → %s", len(molecules), path)
+
+
+def write_receptor_pdb(
+    pdb_lines: list[str],
+    ligand_coords: NDArray[np.float64],
+    path: Path,
+    tol: float = 0.05,
+) -> None:
+    """Write a PDB containing only lines whose coords are NOT in any ligand."""
+
+    kept = 0
+    prev_line = None
+
+    with open(path, "w") as fh:
+        for line in pdb_lines:
+            if line.startswith(("ATOM", "HETATM")):
+                coord = np.array([
+                    float(line[30:38]),
+                    float(line[38:46]),
+                    float(line[46:54]),
+                ])
+                dists = np.linalg.norm(ligand_coords - coord, axis=1)
+                if dists.min() < tol:
+                    continue  # this atom belongs to a ligand – skip
+
+            if prev_line is not None and prev_line.startswith('TER'):
+                continue
+
+            fh.write(line)
+            prev_line = line
+            kept += 1
+
+    log.info("Wrote receptor PDB (%d lines) → %s", kept, path)
+
+
+def classify_molecule(
+    mol: Molecule,
+    pdb_atoms: list[PDBAtom],
+    tol: float,
+    ligand_resname: str = "LIG",
+) -> str:
+    """Classify a molecule as 'lig' or 'cof' based on PDB residue names.
+
+    For each atom in *mol*, find the closest PDB atom and record its residue
+    name.  If the majority of matched atoms come from residues named
+    *ligand_resname*, return ``'lig'``; otherwise ``'cof'``.
+    """
+    pdb_coords = pdb_coord_matrix(pdb_atoms)
+    lig_votes = 0
+    cof_votes = 0
+
+    for atom in mol.atoms:
+        dists = np.linalg.norm(pdb_coords - atom.coord, axis=1)
+        nearest_idx = int(dists.argmin())
+        if dists[nearest_idx] < tol:
+            if pdb_atoms[nearest_idx].resname == ligand_resname:
+                lig_votes += 1
+            else:
+                cof_votes += 1
+
+    label = "lig" if lig_votes >= cof_votes else "cof"
+    log.info("  Classified component (%d atoms) as %s "
+             "(LIG matches: %d, other: %d)",
+             mol.n_atoms, label, lig_votes, cof_votes)
+    return label
+
+
+# ---------------------------------------------------------------------------
+# Pipeline
+# ---------------------------------------------------------------------------
+
+def split_system(
+    pdb_path: Path = Path("system.pdb"),
+    sdf_dir: Path = Path("ligands"),
+    out_dir: Path = Path("."),
+    cfg: PipelineConfig = PipelineConfig(),
+    ligand_resname: str = "LIG",
+) -> list[Molecule]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- load & merge ---
+    pdb_atoms = read_pdb_heavy_atoms(pdb_path)
+    pdb_coords = pdb_coord_matrix(pdb_atoms)
+    mol = read_sdf_directory(sdf_dir)
+    log.info("Loaded %d PDB heavy atoms, %d merged SDF atoms, %d merged SDF bonds",
+             len(pdb_atoms), mol.n_atoms, mol.n_bonds)
+
+    # --- step 1: keep only atoms present in the PDB ---
+    mol = mol.filter_by_coords(pdb_coords, tol=cfg.coord_match_tol)
+    log.info("After coord filter: %d atoms, %d bonds", mol.n_atoms, mol.n_bonds)
+
+    # --- step 2: add proximity bonds ---
+    n_added = mol.add_proximity_bonds(
+        cutoff=cfg.proximity_bond_cutoff,
+        default_rest=cfg.default_bond_line,
+    )
+    log.info("Added %d proximity bonds (cutoff=%.2f Å)",
+             n_added, cfg.proximity_bond_cutoff)
+
+    # --- step 3: split by connectivity ---
+    components = mol.connected_components()
+    log.info("Split into %d molecules (sizes: %s)",
+             len(components), [m.n_atoms for m in components])
+
+    # --- step 4: classify & write individual SDFs ---
+    lig_idx = 0
+    cof_idx = 0
+    for comp in components:
+        label = classify_molecule(comp, pdb_atoms, cfg.coord_match_tol,
+                                  ligand_resname=ligand_resname)
+        if label == "lig":
+            lig_idx += 1
+            write_sdf([comp], out_dir / f"lig_fixed_{lig_idx}.sdf")
+        else:
+            cof_idx += 1
+            write_sdf([comp], out_dir / f"cof_fixed_{cof_idx}.sdf")
+
+    log.info("Wrote %d ligand(s) and %d cofactor(s)", lig_idx, cof_idx)
+
+    # Receptor PDB (system minus ligand/cofactor atoms)
+    all_ligand_coords = mol.coord_matrix
+    pdb_lines = read_pdb_lines(pdb_path)
+    write_receptor_pdb(
+        pdb_lines, all_ligand_coords,
+        out_dir / "receptor_fixed.pdb",
+        tol=cfg.coord_match_tol,
+    )
+
+    return components

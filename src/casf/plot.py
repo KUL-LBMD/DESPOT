@@ -33,12 +33,12 @@ HEATMAP_CMAP = 'mako_r'
 plt.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-    'font.size': 7,
+    'font.size': 5,
     'axes.titlesize': 10,
     'axes.labelsize': 7,
-    'xtick.labelsize': 6,
-    'ytick.labelsize': 6,
-    'legend.fontsize': 6,
+    'xtick.labelsize': 2,
+    'ytick.labelsize': 2,
+    'legend.fontsize': 5,
     'figure.dpi': 300,
     'savefig.dpi': 300,
     'savefig.bbox': 'tight',
@@ -46,6 +46,30 @@ plt.rcParams.update({
     'xtick.major.width': 0.6,
     'ytick.major.width': 0.6,
 })
+
+CATEGORY_COLORS = {
+    'empirical': '#E63946',
+    'physical': '#457B9D',
+    'kbp': '#2A9D8F',
+}
+
+SCORE_CATEGORY = {
+    'DESPOT': 'kbp',
+    'DESPOT-Iso': 'kbp',
+    'DESPOT-DS': 'kbp',
+    'DrugScoreX': 'kbp',
+    'ASP': 'kbp',
+    'AutoDockVina': 'empirical',
+    'DrugScoreCSD': 'kbp',
+    'DrugScore2018': 'kbp',
+    'GlideScore-SP': 'empirical',
+    'GoldScore': 'physical',
+    'PMF04': 'kbp',
+    'ChemScore': 'empirical',
+    'ChemPLP': 'empirical',
+    'GBVI-WSA-dG': 'physical',
+    'ΔVinaRF20': 'empirical'
+}
 
 # ============================================================================
 # Helper Functions
@@ -66,10 +90,9 @@ def build_significance_groups(stats_dict, pvals, stat_key='estimate'):
     current_group = [methods_sorted[0]]
     
     for i in range(1, len(methods_sorted)):
-        prev = methods_sorted[i-1]
         curr = methods_sorted[i]
         
-        if pvals.loc[curr, prev] > 0.1:
+        if pvals.loc[curr, current_group[0]] > 0.1:
             current_group.append(curr)
         else:
             groups.append(current_group)
@@ -87,8 +110,9 @@ def plot_ci_horizontal(name_map, ax, stats_dict, methods_sorted, groups, xlabel,
     # Draw background stripes for significance groups
     for g_idx, group in enumerate(groups):
         if g_idx % 2 == 0:
-            y_min = y_positions[group[-1]] - 0.5
-            y_max = y_positions[group[0]] + 0.5
+            ys = [y_positions[m] for m in group]
+            y_min = min(ys) - 0.5
+            y_max = max(ys) + 0.5
             ax.axhspan(y_min, y_max, color=STRIPE_COLOR, zorder=0, alpha=0.9)
     
     # Draw confidence intervals and point estimates
@@ -102,9 +126,9 @@ def plot_ci_horizontal(name_map, ax, stats_dict, methods_sorted, groups, xlabel,
         hi = stats_dict[m]['ci_high']
         
         # CI line
-        ax.plot([lo, hi], [i, i], color=CI_COLOR, lw=2.0, zorder=2, solid_capstyle='round')
+        ax.plot([lo, hi], [i, i], color=CI_COLOR, lw=1.4, zorder=2, solid_capstyle='round')
         # Point estimate
-        ax.plot(point, i, 'o', color=POINT_COLOR, zorder=2.5, markersize=4)
+        ax.plot(point, i, 'o', color=POINT_COLOR, zorder=2.5, markersize=2)
     
     # Axes formatting
     ax.set_yticks(y)
@@ -120,13 +144,18 @@ def plot_ci_horizontal(name_map, ax, stats_dict, methods_sorted, groups, xlabel,
 
     ax.invert_yaxis()
     ax.set_xlabel(xlabel)
-    ax.grid(axis='x', linestyle='--', alpha=0.4, linewidth=0.5)
     ax.set_axisbelow(True)
-    
+    ax.grid(axis='x', linestyle='--', alpha=0.4, linewidth=0.5)
+
     # Remove top and right spines
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
+    for tick_label in ax.get_yticklabels():
+        name = tick_label.get_text()
+        cat = SCORE_CATEGORY.get(name)
+        if cat:
+            tick_label.set_color(CATEGORY_COLORS[cat])
 
 def plot_stacked_bars(name_list, name_map, ax, data_arr, labels, bar_labels, title, ylabel=None, 
                       show_legend=False, legend_title=None):
@@ -170,7 +199,13 @@ def plot_stacked_bars(name_list, name_map, ax, data_arr, labels, bar_labels, tit
     ax.grid(axis='y', linestyle='--', alpha=0.3, linewidth=0.5)
     
     if show_legend:
-        ax.legend(title=legend_title, loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 7})
+        ax.legend(title=legend_title, loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 5})
+
+    for tick_label in ax.get_xticklabels():  
+        name = tick_label.get_text()
+        cat = SCORE_CATEGORY.get(name)
+        if cat:
+            tick_label.set_color(CATEGORY_COLORS[cat])
     
     return ax.get_legend_handles_labels()
 
@@ -178,7 +213,9 @@ def plot_stacked_bars(name_list, name_map, ax, data_arr, labels, bar_labels, tit
 # Main Script
 # ============================================================================
 
-def generate_combined_figure(output_path, name_list, name_list_clean, score_df, spearman_arr, dock_top_arr, dock_spearman_thresholds, forward_top_arr, reverse_top_arr, ef_arr):
+def generate_combined_figure(output_path, score_name_list, score_name_list_clean, score_df, spearman_arr, 
+    dock_name_list, dock_name_list_clean, dock_top_arr, dock_spearman_thresholds,
+    forward_top_arr, reverse_top_arr, ef_arr):
     """Generate the complete combined figure."""
     
     print("Loading data and computing statistics...")
@@ -187,8 +224,11 @@ def generate_combined_figure(output_path, name_list, name_list_clean, score_df, 
     # Step 1: Load all data
     # -------------------------------------------------------------------------
 
-    score_names = [f'{x}_score' for x in name_list]
-    name_map = dict(zip(score_names, name_list_clean))    
+    score_names = [f'{x}_score' for x in score_name_list]
+    name_map = dict(zip(score_names, score_name_list_clean))
+
+    score_names_ext = [f'{x}_score' for x in dock_name_list]
+    name_map_ext = dict(zip(score_names_ext, dock_name_list_clean))
     
     # Scoring power (Pearson)
     affinities = score_df['logKa'].values
@@ -208,7 +248,7 @@ def generate_combined_figure(output_path, name_list, name_list_clean, score_df, 
     for ef_idx in [0, 1, 2]:  # 1%, 2%, 5%
         ef_slice = ef_arr[:, :, ef_idx]
         ef_dict = {}
-        for i, score in enumerate(score_names):
+        for i, score in enumerate(score_names_ext):
             ef_values = ef_slice[i, :]
             ef_dict[score] = bca_mean_ci(ef_values)
         ef_dicts.append(ef_dict)
@@ -286,7 +326,7 @@ def generate_combined_figure(output_path, name_list, name_list_clean, score_df, 
     
     # Row 2: Docking success rate
     docking_labels = ['Top-1', 'Top-2', 'Top-3']
-    plot_stacked_bars(name_list, name_map, ax_docking, dock_top_arr, score_names, docking_labels,
+    plot_stacked_bars(dock_name_list, name_map_ext, ax_docking, dock_top_arr, score_names_ext, docking_labels,
                       title='', ylabel='Success rate', show_legend=True,
                       legend_title='Recovery')
     ax_docking.set_title('(C) Docking power', loc='left', fontweight='bold', fontsize=9)
@@ -299,11 +339,11 @@ def generate_combined_figure(output_path, name_list, name_list_clean, score_df, 
     row_means = dock_spearman_thresholds.mean(axis=1)
     sort_idx = np.argsort(row_means)[::-1]
     spearman_thresholds_sorted = dock_spearman_thresholds[sort_idx]
-    score_names_sorted = [score_names[i] for i in sort_idx]
+    score_names_sorted = [score_names_ext[i] for i in sort_idx]
     
     hm = sns.heatmap(spearman_thresholds_sorted, 
                      xticklabels=threshold_list,
-                     yticklabels=[name_map.get(s, s) for s in score_names_sorted],
+                     yticklabels=[name_map_ext.get(s, s) for s in score_names_sorted],
                      cmap=HEATMAP_CMAP, ax=ax_heatmap, 
                      vmin=0.3, vmax=0.8,
                      cbar_kws={'label': 'Mean −ρ(RMSD, score)', 'shrink': 0.8})
@@ -319,13 +359,13 @@ def generate_combined_figure(output_path, name_list, name_list_clean, score_df, 
     
     # Row 3: Forward screening
     forward_labels = ['Top 1%', 'Top 2%', 'Top 5%']
-    plot_stacked_bars(name_list, name_map, ax_forward, forward_top_arr, score_names, forward_labels,
+    plot_stacked_bars(dock_name_list, name_map_ext, ax_forward, forward_top_arr, score_names_ext, forward_labels,
                       title='', ylabel='Success rate', show_legend=False)
     ax_forward.set_title('(E) Forward screening', loc='left', fontweight='bold', fontsize=9)
 
     # Row 3: Reverse screening
     reverse_labels = ['Top 2%', 'Top 5%', 'Top 10%']
-    handles, labels = plot_stacked_bars(name_list, name_map, ax_reverse, reverse_top_arr, score_names, 
+    handles, labels = plot_stacked_bars(dock_name_list, name_map_ext, ax_reverse, reverse_top_arr, score_names_ext, 
                                          reverse_labels, title='', ylabel = 'Success rate', show_legend=False)
     ax_reverse.set_title('(F) Reverse screening', loc='left', fontweight='bold', fontsize=9)
     
@@ -339,7 +379,7 @@ def generate_combined_figure(output_path, name_list, name_list_clean, score_df, 
     
     for idx, (ax, (methods, groups), ef_dict, title) in enumerate(
             zip(ef_axes, ef_methods_groups, ef_dicts, ef_titles)):
-        plot_ci_horizontal(name_map, ax, ef_dict, methods, groups,
+        plot_ci_horizontal(name_map_ext, ax, ef_dict, methods, groups,
                            xlabel='Mean enrichment factor (90% CI)', stat_key='mean')
         ax.set_title(title, loc='left', fontweight='bold', fontsize=9)
         ax.set_xlim(0, None)

@@ -535,6 +535,8 @@ class OverlapResolver:
             old_id = atom.id
             new_id = f'{old_id[0]}{i+1}'
             atom.id = new_id
+            atom.name = new_id
+            atom.fullname = new_id
             new_residue.add(atom)
 
         new_chain.add(new_residue)
@@ -560,13 +562,25 @@ class OverlapResolver:
             old_id = atom.id
             new_id = f'{old_id[0]}{i+1}'
             atom.id = new_id
+            atom.name = new_id
+            atom.fullname = new_id
             new_residue.add(atom)
 
         new_chain.add(new_residue)
         model.add(new_chain)
 
+        # Rename all atoms
+        for chain in model:
+            for residue in chain:
+                for i, atom in enumerate(residue):
+                    if len(atom.name) > 4:
+                        new_name = f'{atom.name[0]}{i:03d}'
+                        atom.name = new_name
+                        atom.fullname = new_name
+
+
         # Check if final ligand chain has more than 10 heavy atoms
-        atom_count = sum(1 for atom in new_chain.get_atoms())
+        atom_count = sum(1 for atom in new_chain.get_atoms() if atom.element != 'H')
         return atom_count
 
 class ComplexFixer:
@@ -634,12 +648,13 @@ class ComplexFixer:
             self.overlap_resolver.merge_bonded_chains(structure, bonds_to_add)
             atom_count = self.overlap_resolver.rename_ligand(structure)
 
-            # Step 8: save output
-            io = PDBIO()
-            io.set_structure(structure)
+            if atom_count >= 10 and atom_count <= 100:
+                # Step 8: save output
+                io = PDBIO()
+                io.set_structure(structure)
 
-            output_path = f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb'
-            io.save(output_path)
+                output_path = f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb'
+                io.save(output_path)
 
     def wrapper(self, num_cores = 1):
         """
