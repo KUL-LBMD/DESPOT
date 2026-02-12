@@ -255,5 +255,5 @@ class PLI_Filter:
 
 	def wrapper(self, maxdev_threshold = 0.1, max_count = 500):
 		maxdev_subset = self.prune_maxdev(maxdev_threshold = maxdev_threshold)
-		pli_filtered_subset = self.prune_ccd(maxdev_subset, max_count = max_count)
+		maxdev_subset.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv', index = False)
 

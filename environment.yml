@@ -1,4 +1,4 @@
-name: DESPOT
+name: DESPOT_v2
 
 channels:
   - conda-forge
@@ -23,6 +23,12 @@ dependencies:
   - networkx
   - python-dotenv
   - pip
+  - rdkit
+  - openmm
+  - openmmforcefields
+  - openff-toolkit
+  - pdbfixer
+  - openbabel
   - pip:
       - scikit-posthocs
       - biopandas

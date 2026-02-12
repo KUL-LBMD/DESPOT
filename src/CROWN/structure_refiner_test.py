@@ -85,18 +85,24 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 
 	# Strip existing Hs, protonate at target pH
 	mol_noh = Chem.RemoveAllHs(mol)
-	protonated = dl.run_with_mol_list(
+	protonated_mol = dl.run_with_mol_list(
 		[mol_noh],
 		min_ph=ph, max_ph=ph,
 		pka_precision=0.0,
 		silent=True
 	)[0]
 
-	# Transfer 3D coordinates from original mol via substructure match
-	protonated = AllChem.AssignBondOrdersFromTemplate(protonated, mol_noh)
+	protonated_3d = AllChem.AssignBondOrdersFromTemplate(protonated_mol, mol_noh)
+	# Clear forced valence so RDKit can infer implicit Hs
+	rw = Chem.RWMol(protonated_3d)
+	for atom in rw.GetAtoms():
+		atom.SetNoImplicit(False)
+		atom.SetNumExplicitHs(0)
+		atom.SetNumRadicalElectrons(0)
+	Chem.SanitizeMol(rw)
 
 	# Add explicit Hs with 3D coords
-	protonated_h = Chem.AddHs(protonated, addCoords=True)
+	protonated_h = Chem.AddHs(rw, addCoords=True)
 
 	writer = Chem.SDWriter(out_sdf)
 	writer.write(protonated_h)
@@ -166,10 +172,10 @@ def refine_system(input_dir):
 			logger.info(f"Processing {input_dir}")
 
 			for filename in os.listdir(f'{DATA_DIR}/CROWN/systems/{input_dir}'):
-				if filename.endswith('.sdf'):
+				if filename.endswith('.sdf') and not filename.endswith('_h.sdf'):
 					basename = filename[:-4]
-					protonate_ligand(f'{DATA_DIR}/CROWN/systems/{input_dir}/{filename}', f'{tmp_dir}/{basename}_h.sdf', ph = PH)
-					if not os.path.isfile(f'{tmp_dir}/{basename}_h.sdf'):
+					protonate_ligand(f'{DATA_DIR}/CROWN/systems/{input_dir}/{filename}', f'{DATA_DIR}/CROWN/systems/{input_dir}/{basename}_h.sdf', ph = PH)
+					if not os.path.isfile(f'{DATA_DIR}/CROWN/systems/{input_dir}/{basename}_h.sdf'):
 						logger.error(f"Protonation failed for {filename} — aborting refinement.")
 						return
 
@@ -222,10 +228,10 @@ def refine_system(input_dir):
 			ligand_molecules = []
 			ligand_entries = []  # (basename, Molecule, list of atom indices)
 
-			for ligand_file in sorted(os.listdir(tmp_dir)):
+			for ligand_file in sorted(os.listdir(f'{DATA_DIR}/CROWN/systems/{input_dir}')):
 				if ligand_file.endswith('_h.sdf'):
 					basename = ligand_file.replace('_h.sdf', '')
-					ligand_mol = Molecule.from_file(f'{tmp_dir}/{ligand_file}')
+					ligand_mol = Molecule.from_file(f'{DATA_DIR}/CROWN/systems/{input_dir}/{ligand_file}')
 					ligand_molecules.append(ligand_mol)
 
 					# Convert OpenFF positions to OpenMM unit system

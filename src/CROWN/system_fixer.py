@@ -361,7 +361,7 @@ def write_receptor_pdb(
                 if dists.min() < tol:
                     continue  # this atom belongs to a ligand – skip
 
-            if prev_line is not None and prev_line.startswith('TER'):
+            elif line.startswith('TER') and prev_line is not None and prev_line.startswith('TER'):
                 continue
 
             fh.write(line)

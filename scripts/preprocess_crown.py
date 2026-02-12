@@ -2,12 +2,13 @@ from src.CROWN.structure_filter import filter_structures
 from src.CROWN.structure_fixer import ComplexFixer
 from src.CROWN.pli_filter import PLI_Filter
 from src.CROWN.system_fixer import split_system
-
+from src.CROWN.structure_refiner import refine_system
 from src.config import DATA_DIR, SOURCE_DB_PATH
 
 import pandas as pd
 import os
 from pathlib import Path
+from joblib import Parallel, delayed
 
 # Set some variables for running the scripts
 NUM_CORES = 32
@@ -31,26 +32,27 @@ def main():
 	print('Step 1 done')
 
 	# Step 2: fix initial mmCIF structures
-	complex_fixer = ComplexFixer(initial_subset)
-	complex_fixer.wrapper(NUM_CORES)
+	#complex_fixer = ComplexFixer(initial_subset)
+	#complex_fixer.wrapper(NUM_CORES)
 	#print('Step 2 done')
 
 	# Step 3: PLI filter
-	#pli_filter = PLI_Filter(initial_subset)
-	#pli_filter.wrapper(MAXDEV_THRESHOLD, MAX_COUNT)
-	#print('Step 3 done')
+	pli_filter = PLI_Filter(initial_subset)
+	pli_filter.wrapper(MAXDEV_THRESHOLD, MAX_COUNT)
+	print('Step 3 done')
 
 	# Step 4: make fixed systems directory to work with later
-	os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
+	#os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
 
 	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
-	for row in df.itertuples():
-		print(row.basename)
-		split_system(
+	Parallel(n_jobs = 32, verbose = 10)(delayed(split_system)(
 			pdb_path = Path(f'{DATA_DIR}/CROWN/raw_pdb/{row.basename}.pdb'),
 			sdf_dir = Path(f'{SOURCE_DB_PATH}/systems/{row.system_id}/ligand_files'),
 			out_dir = Path(f'{DATA_DIR}/CROWN/systems/{row.basename}')
-		)
+		) for row in df.itertuples())
+
+	# Step 5: Protonate and energy-minimize
+	Parallel(n_jobs = 64, verbose = 10)(delayed(refine_system)(row.basename) for row in df.itertuples())
 
 if __name__ == '__main__':
 	main()
