@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # DEFAULT PARAMETERS
 # ============================================================================
-RESTRAINT_RADIUS = 0.6  # Distance in nm (6 Å = 0.6 nm)
-RESTRAINT_STRENGTH = 1000000.0  # kJ/mol/nm² - very high to effectively freeze atoms
+MOBILE_RADIUS = 0.8  # Distance in nm (8 Å = 0.8 nm)
+FIX_STRENGTH = 1000000.0  # kJ/mol/nm² - very high to effectively freeze atoms
+TETHER_STRENGTH = 10 # kcal/(mol*A^2). Default parameter in MOE
+TETHER_FLATBOTTOM = 0.25 # Within 0.25 A radius, atoms feel no tethering force
 MINIMIZATION_STEPS = 5000
 ENERGY_REPORT_INTERVAL = 50
 TEMPERATURE = 300  # Kelvin
@@ -153,10 +155,10 @@ def refine_system(input_dir):
 	# ====================================================================
 
 	with tempfile.TemporaryDirectory() as tmp_dir:
-		for filename in os.listdir(input_dir):
+		for filename in os.listdir(f'{DATA_DIR}/CROWN/systems/{input_dir}'):
 			if filename.endswith('.sdf'):
 				basename = filename[:-4]
-				protonate_ligand(f'{input_dir}/{filename}', f'{tmp_dir}/{basename}_h.sdf', ph = PH)
+				protonate_ligand(f'{DATA_DIR}/CROWN/systems/{input_dir}/{filename}', f'{tmp_dir}/{basename}_h.sdf', ph = PH)
 				if not os.path.isfile(f'{tmp_dir}/{basename}_h.sdf'):
 					logger.error(f"Protonation failed for {filename} — aborting refinement.")
 					return
@@ -165,7 +167,7 @@ def refine_system(input_dir):
 		# Step 2: Create protein-only structure and run PDBFixer
 		# ====================================================================
 
-		pdb = PDBFile(f'{input_dir}/receptor_fixed.pdb')
+		pdb = PDBFile(f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb')
 		# Remove protein hydrogens using Modeller
 		with tempfile.NamedTemporaryFile(mode='w', suffix='.pdb', delete=False) as tmp:
 			PDBFile.writeFile(pdb.topology, pdb.positions, tmp)
@@ -208,23 +210,27 @@ def refine_system(input_dir):
 
 		# Add each ligand back to the modeller
 		ligand_molecules = []
+		ligand_atom_indices = set()
 
 		for ligand_file in os.listdir(tmp_dir):
-			ligand_mol = Molecule.from_file(f'{tmp_dir}/{ligand_file}')
-			ligand_molecules.append(ligand_mol)
+			if ligand_file.endswith('_h.sdf'):
+				ligand_mol = Molecule.from_file(f'{tmp_dir}/{ligand_file}')
+				ligand_molecules.append(ligand_mol)
 
-			# Convert OpenFF positions to OpenMM unit system
-			ligand_topology = ligand_mol.to_topology().to_openmm()
-			ligand_positions = ligand_mol.conformers[0].to_openmm()
+				# Convert OpenFF positions to OpenMM unit system
+				ligand_topology = ligand_mol.to_topology().to_openmm()
+				ligand_positions = ligand_mol.conformers[0].to_openmm()
 
-			# Add ligand to modeller
-			modeller.add(ligand_topology, ligand_positions)
+				# Record indices before adding (they'll start at current atom count)
+				offset = modeller.topology.getNumAtoms()
+				modeller.add(ligand_topology, ligand_positions)
+				ligand_atom_indices.update(range(offset, offset + ligand_topology.getNumAtoms()))
 
 		system_generator = SystemGenerator(
 			forcefields=['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml'], # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
 			small_molecule_forcefield='openff-2.2.0',
 			molecules=ligand_molecules,
-			cache=f'{tmp_dir}/{input_dir}_db.json')
+			cache=f'{tmp_dir}/{input_dir}_db.json'
 		)
 
 		system = system_generator.create_system(modeller.topology)
@@ -233,23 +239,15 @@ def refine_system(input_dir):
 		# STEP 4: Identify mobile region around ligands
 		# ====================================================================
 
-		# Find all ligand atoms
-		ligand_atom_indices = set()
-		for residue in modeller.topology.residues():
-			if (residue.name not in WATER_NAMES and residue.name not in STANDARD_AMINO_ACIDS):
-				for atom in residue.atoms():
-					ligand_atom_indices.add(atom.index)
-
-		positions = modeller.positions
-
 		# Use KDTree for more efficient spatial lookup
+		positions = modeller.positions
 		all_positions_nm = np.array([positions[i].value_in_unit(unit.nanometer) for i in range(len(positions))])
 		ligand_indices_list = sorted(ligand_atom_indices)
 		ligand_positions_nm = all_positions_nm[ligand_indices_list]
 		ligand_tree = KDTree(ligand_positions_nm)
 
 		distances, _ = ligand_tree.query(all_positions_nm, k=1)  # nearest ligand atom
-		mobile_mask = distances <= RESTRAINT_RADIUS
+		mobile_mask = distances <= MOBILE_RADIUS
 		mobile_atoms = set(np.where(mobile_mask)[0].tolist()) # atom indices where distance smaller than restraint radius
 
 		# ====================================================================
@@ -257,7 +255,7 @@ def refine_system(input_dir):
                 # ====================================================================
 
 		nonmobile_restraint = CustomExternalForce("k*r^2; r=sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
-		nonmobile_restraint.addGlobalParameter('k', RESTRAINT_STRENGTH * unit.kilojoules_per_mole / unit.nanometer**2)
+		nonmobile_restraint.addGlobalParameter('k', FIX_STRENGTH * unit.kilojoules_per_mole / unit.nanometer**2)
 		nonmobile_restraint.addPerParticleParameter("x0")
 		nonmobile_restraint.addPerParticleParameter("y0")
 		nonmobile_restraint.addPerParticleParameter("z0")
@@ -266,23 +264,33 @@ def refine_system(input_dir):
 		# Energy, force and second derivative at r=0.25 are 0.
 		# Energy and force at 1.25 are 1, second derivative is 0.
 		mobile_restraint = CustomExternalForce('w*('
-			'step(r-0.25)*(1-step(r-1.25))*(3*(r-0.25)^5-8*(r-0.25)^4+6*(r-0.25)^3)' # [0.25, 1.25]
-			'+step(r-1.25)*(r-0.25)' # [1.25, +inf]
+			'step(r-u)*(1-step(r-(d+u)))*(a*(r-u)^5+b*(r-u)^4+c*(r-u)^3)' # [u, 1+u]
+			'+step(r-(d+u))*d*(r-u)' # [1+u, +inf]
 			'); '
 			'r=sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)'
 		)
 
-		mobile_restraint.addGlobalParameter('w', 10 * unit.kilocalories_per_mole / unit.angstrom**2)
+		mobile_restraint.addGlobalParameter('w', TETHER_STRENGTH * unit.kilocalories_per_mole / unit.angstrom**2)
+		mobile_restraint.addGlobalParameter('u', TETHER_FLATBOTTOM * unit.angstrom)
+		mobile_restraint.addGlobalParameter('a', 3 * unit.angstrom**(-3))
+		mobile_restraint.addGlobalParameter('b', -8 * unit.angstrom**(-2))
+		mobile_restraint.addGlobalParameter('c', 6 * unit.angstrom**(-1))
+		mobile_restraint.addGlobalParameter('d', 1.0 * unit.angstrom)
 		mobile_restraint.addPerParticleParameter("x0")
 		mobile_restraint.addPerParticleParameter("y0")
 		mobile_restraint.addPerParticleParameter("z0")
 
 		for atom in modeller.topology.atoms():
-			pos = positions[atom.index]
+			pos = positions[atom.index].value_in_unit(unit.nanometers)
+
+			# Leave hydrogens and water atoms fully unrestrained
+			if atom.element.symbol == 'H' or atom.residue.name in WATER_NAMES:
+				continue
+
 			if atom.index not in mobile_atoms:
-				nonmobile_restraint.addParticle(atom.index, [pos.x, pos.y, pos.z])
+				nonmobile_restraint.addParticle(atom.index, pos)
 			else:
-				mobile_restraint.addParticle(atom.index, [pos.x, pos.y, pos.z])
+				mobile_restraint.addParticle(atom.index, pos)
 
 		system.addForce(nonmobile_restraint)
 		system.addForce(mobile_restraint)
