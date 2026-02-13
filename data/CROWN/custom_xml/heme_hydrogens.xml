@@ -1,0 +1,51 @@
+<Residues>
+  <Residue name="HEM">
+    <!-- Meso hydrogens -->
+    <H name="HHA" parent="CHA"/>
+    <H name="HHB" parent="CHB"/>
+    <H name="HHC" parent="CHC"/>
+    <H name="HHD" parent="CHD"/>
+
+    <!-- Methyl group A -->
+    <H name="HMA1" parent="CMA"/>
+    <H name="HMA2" parent="CMA"/>
+    <H name="HMA3" parent="CMA"/>
+
+    <!-- Methyl group B -->
+    <H name="HMB1" parent="CMB"/>
+    <H name="HMB2" parent="CMB"/>
+    <H name="HMB3" parent="CMB"/>
+
+    <!-- Methyl group C -->
+    <H name="HMC1" parent="CMC"/>
+    <H name="HMC2" parent="CMC"/>
+    <H name="HMC3" parent="CMC"/>
+
+    <!-- Methyl group D -->
+    <H name="HMD1" parent="CMD"/>
+    <H name="HMD2" parent="CMD"/>
+    <H name="HMD3" parent="CMD"/>
+
+    <!-- Propionate A: CAA-CBA-CGA -->
+    <H name="HAA2" parent="CAA"/>
+    <H name="HAA3" parent="CAA"/>
+    <H name="HBA2" parent="CBA"/>
+    <H name="HBA3" parent="CBA"/>
+
+    <!-- Propionate D: CAD-CBD-CGD -->
+    <H name="HAD2" parent="CAD"/>
+    <H name="HAD3" parent="CAD"/>
+    <H name="HBD2" parent="CBD"/>
+    <H name="HBD3" parent="CBD"/>
+
+    <!-- Vinyl B: CAB=CBB -->
+    <H name="HAB" parent="CAB"/>
+    <H name="HBB1" parent="CBB"/>
+    <H name="HBB2" parent="CBB"/>
+
+    <!-- Vinyl C: CAC=CBC -->
+    <H name="HAC" parent="CAC"/>
+    <H name="HBC1" parent="CBC"/>
+    <H name="HBC2" parent="CBC"/>
+  </Residue>
+</Residues>
