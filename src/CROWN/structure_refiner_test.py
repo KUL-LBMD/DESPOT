@@ -62,9 +62,19 @@ def add_heme_bonds(topology, positions):
         atoms = list(residue.atoms())
         pos = np.array([(positions[a.index].x, positions[a.index].y, positions[a.index].z) 
                         for a in atoms])
+
+        # Collect existing bonds to avoid duplicates
+        existing_bonds = set()
+        for bond in topology.bonds():
+            existing_bonds.add((bond[0].index, bond[1].index))
+            existing_bonds.add((bond[1].index, bond[0].index))
         
         for i in range(len(atoms)):
             for j in range(i + 1, len(atoms)):
+
+                if (atoms[i].index, atoms[j].index) in existing_bonds:
+                    continue
+                
                 dist = np.linalg.norm(pos[i] - pos[j])  # already in nm from OpenMM
                 
                 ei = atoms[i].element.symbol
@@ -268,7 +278,7 @@ def refine_system(input_dir):
 			# Run PDBFixer on protein-only structure
 			Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/heme_hydrogens.xml')
 
-			with open(f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb') as f:
+			with open(tmp_with_seqres) as f:
 				for line in f:
 					if 'FE' in line[12:16]:
 						print(repr(line[76:80]))
@@ -315,6 +325,11 @@ def refine_system(input_dir):
 			all_ligand_indices = set()
 			for _, _, indices in ligand_entries:
 				all_ligand_indices.update(indices)
+
+			for residue in modeller.topology.residues():
+				if residue.name not in STANDARD_AMINO_ACIDS:
+					for atom in residue.atoms():
+						all_ligand_indices.add(atom.index)
 
 			system_generator = SystemGenerator(
 				forcefields=['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml', f'{DATA_DIR}/CROWN/custom_xml/heme_ff.xml'], # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364

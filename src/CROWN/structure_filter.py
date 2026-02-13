@@ -34,8 +34,8 @@ def filter_structures():
 		& (df['ligand_num_neighboring_ppi_atoms_within_8A_of_gap'] == 0) ### No missing protein atoms close to pocket
 		& (df['entry_determination_method'] == 'X-RAY DIFFRACTION')
 		& (df['entry_resolution'] <= 3.0)
-		& ((df['system_ligand_validation_average_rsr'] < 0.3) | (df['system_ligand_validation_average_rsr'].isna()))
-		& ((df['system_ligand_validation_average_rscc'] > 0.8) | (df['system_ligand_validation_average_rscc'].isna()))
+		& (df['system_ligand_validation_average_rsr'] < 0.3))
+		& (df['system_ligand_validation_average_rscc'] > 0.8))
 		& (df['system_id'].isin(dir_list))
 		]
 

@@ -24,6 +24,8 @@ COMMON_ARTIFACTS = ['PEG', 'CRY', 'EDO', 'ACT', 'DMS', 'MES', 'GOL', 'EPE', 'BU1
 
 VALID_BOND_ATOMS = {'C', 'N', 'O', 'S', 'P', 'B'}
 
+METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD', 'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43']
+
 @dataclass
 class OccupancyInfo:
     """Store occupancy information for a residue"""
@@ -547,27 +549,36 @@ class OverlapResolver:
 
         lig_atoms = []
         chain = model['Z']
+
+        cofactor_bool = False
+
         for residue in chain:
+            if residue.get_resname() in METALLOCOFACTOR_LIST:
+                cofactor_bool = True
+                break
+
             for atom in residue.get_atoms():
                 lig_atoms.append(atom)
 
-        model.detach_child('Z')
+        if not cofactor_bool:
 
-        # Create new merged chain
-        new_chain = Chain('Z')
-        new_residue = Residue((' ', 1, ' '), 'LIG', ' ')
+            model.detach_child('Z')
 
-        # Add atoms with unique IDs
-        for i, atom in enumerate(lig_atoms):
-            old_id = atom.id
-            new_id = f'{old_id[0]}{i+1}'
-            atom.id = new_id
-            atom.name = new_id
-            atom.fullname = new_id
-            new_residue.add(atom)
+            # Create new merged chain
+            new_chain = Chain('Z')
+            new_residue = Residue((' ', 1, ' '), 'LIG', ' ')
 
-        new_chain.add(new_residue)
-        model.add(new_chain)
+            # Add atoms with unique IDs
+            for i, atom in enumerate(lig_atoms):
+                old_id = atom.id
+                new_id = f'{old_id[0]}{i+1}'
+                atom.id = new_id
+                atom.name = new_id
+                atom.fullname = new_id
+                new_residue.add(atom)
+
+            new_chain.add(new_residue)
+            model.add(new_chain)
 
         # Rename all atoms
         for chain in model:
@@ -577,7 +588,6 @@ class OverlapResolver:
                         new_name = f'{atom.name[0]}{i:03d}'
                         atom.name = new_name
                         atom.fullname = new_name
-
 
         # Check if final ligand chain has more than 10 heavy atoms
         atom_count = sum(1 for atom in new_chain.get_atoms() if atom.element != 'H')
