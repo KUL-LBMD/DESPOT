@@ -284,10 +284,6 @@ def refine_system(input_dir):
 			modeller = Modeller(fixer.topology, fixer.positions)
 			add_heme_bonds(modeller.topology, modeller.positions)
 
-			for residue in modeller.topology.residues():
-				if residue.name == 'HEM':
-					residue.name = 'HEME'
-
 			modeller.addHydrogens(pH=PH)
 
 			# ====================================================================
@@ -321,7 +317,7 @@ def refine_system(input_dir):
 				all_ligand_indices.update(indices)
 
 			system_generator = SystemGenerator(
-				forcefields=['charmm36.xml', 'charmm36/water.xml'], # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
+				forcefields=['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml', f'{DATA_DIR}/CROWN/custom_xml/heme_ff.xml'], # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
 				small_molecule_forcefield='openff-2.2.0',
 				molecules=ligand_molecules,
 				cache=f'{tmp_dir}/{input_dir}_db.json'
