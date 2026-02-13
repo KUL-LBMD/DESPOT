@@ -37,12 +37,21 @@ STANDARD_AMINO_ACIDS = {
     'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'CYM', 'GLN', 'GLU', 'GLY',
     'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 
     'TRP', 'TYR', 'VAL', 'HIE', 'HIP', 'HID', 'HSD', 'HSE', 'HSP',
-    'ACE', 'NME', 'UNK', 'UNL'
+    'ACE', 'NME', 'UNK', 'UNL', 'LIG'
 }
 
 # ============================================================================
 
 WATER_NAMES = {'HOH', 'WAT', 'TIP3', 'SOL', 'OPC'}
+
+METAL_ATOMIC_NUMBERS = (
+	set(range(3, 5))    |  # Li, Be
+	set(range(11, 14))  |  # Na, Mg, Al
+	set(range(19, 32))  |  # K..Ga
+	set(range(37, 51))  |  # Rb..Sn
+	set(range(55, 84))  |  # Cs..Bi
+	set(range(87, 118))    # Fr..Og
+)
 
 def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	"""Protonate a ligand SDF file at the given pH."""
@@ -60,7 +69,7 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 					mol = Chem.MolFromPDBFile(f'{tmp_dir}/temp.pdb', removeHs=False, sanitize=False)
 					if mol is None:
 						logger.error(f"Failed to load ligand from {sdf_path} using all fallback methods.")
-						return
+						return False
 
 					# FIX OXYGEN FORMAL CHARGES, used to be problem in NAD+ that was deprotonated.
 					for atom in mol.GetAtoms():
@@ -82,6 +91,10 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 
 					formal_charge = Chem.GetFormalCharge(mol)
 					rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
+
+	for atom in mol.GetAtoms():
+		if atom.GetAtomicNum() in METAL_ATOMIC_NUMBERS:
+			return True
 
 	# Strip existing Hs, protonate at target pH
 	mol_noh = Chem.RemoveAllHs(mol)
@@ -109,6 +122,8 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	writer.close()
 	logger.info(f"Protonated ligand written to {out_sdf}")
 
+	return False
+
 def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 	"""
 	Add SEQRES records with ACE/NME caps to a PDB file.
@@ -122,7 +137,7 @@ def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 	chain_sequences = {}
 	for chain in pdb.topology.chains():
 		residues = list(chain.residues())
-		protein_residues = [r for r in residues if r.name in STANDARD_AMINO_ACIDS]
+		protein_residues = [r for r in residues if r.name in STANDARD_AMINO_ACIDS and r.name != 'LIG']
 
 		if protein_residues:
 			# Add ACE at start, NME at end
@@ -171,13 +186,23 @@ def refine_system(input_dir):
 
 			logger.info(f"Processing {input_dir}")
 
+			# Identify which ligand SDFs contain metal atoms (e.g. HEM with Fe).
+			# These will be kept in the receptor PDB and parameterized with the
+			# protein force field instead of the small-molecule force field.
 			for filename in os.listdir(f'{DATA_DIR}/CROWN/systems/{input_dir}'):
 				if filename.endswith('.sdf') and not filename.endswith('_h.sdf'):
 					basename = filename[:-4]
-					protonate_ligand(f'{DATA_DIR}/CROWN/systems/{input_dir}/{filename}', f'{DATA_DIR}/CROWN/systems/{input_dir}/{basename}_h.sdf', ph = PH)
-					if not os.path.isfile(f'{DATA_DIR}/CROWN/systems/{input_dir}/{basename}_h.sdf'):
-						logger.error(f"Protonation failed for {filename} — aborting refinement.")
-						return
+					has_metal_bool = protonate_ligand(f'{DATA_DIR}/CROWN/systems/{input_dir}/{filename}', f'{DATA_DIR}/CROWN/systems/{input_dir}/{basename}_h.sdf', ph = PH)
+
+					if has_metal_bool:
+						subprocess.run(['obabel', f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb', f'{DATA_DIR}/CROWN/systems/{input_dir}/{filename}', '-O', f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb', '-j'],
+							stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+						logger.info(f"Metal detected in {filename} — will parameterize with receptor force field.")
+
+					else:
+						if not os.path.isfile(f'{DATA_DIR}/CROWN/systems/{input_dir}/{basename}_h.sdf'):
+							logger.error(f"Protonation failed for {filename} — aborting refinement.")
+							return
 
 			# ====================================================================
 			# Step 2: Create protein-only structure and run PDBFixer
@@ -194,8 +219,6 @@ def refine_system(input_dir):
 			toDelete = []
 			for atom in modeller.topology.atoms():
 				if atom.element.symbol == 'H' and atom.residue.name in STANDARD_AMINO_ACIDS:
-					toDelete.append(atom)
-				elif atom.residue.name not in STANDARD_AMINO_ACIDS and atom.residue.name not in WATER_NAMES:
 					toDelete.append(atom)
 			if toDelete:
 				modeller.delete(toDelete)

@@ -1,6 +1,6 @@
 """
 split_system.py
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
 Read individual SDF files from a directory, merge them, match against a
 reference PDB, restore missing bonds by proximity, split into connected
 components, classify each by PDB residue name, and write:
@@ -24,6 +24,16 @@ from src.config import DATA_DIR, SOURCE_DB_PATH
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 log = logging.getLogger(__name__)
+
+# Common metal elements found in PDB structures
+METAL_ELEMENTS: set[str] = {
+    "Li", "Be", "Na", "Mg", "Al", "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn",
+    "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "Rb", "Sr", "Y", "Zr", "Nb",
+    "Mo", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Cs", "Ba", "La",
+    "Ce", "Pr", "Nd", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb",
+    "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb",
+    "Bi", "Th", "U",
+}
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -54,6 +64,10 @@ class Atom:
     @property
     def is_heavy(self) -> bool:
         return self.element != "H"
+
+    @property
+    def is_metal(self) -> bool:
+        return self.element in METAL_ELEMENTS
 
 
 @dataclass
@@ -175,6 +189,16 @@ class Molecule:
         return [self._subset(comp) for comp in components]
 
     # -- combining ---------------------------------------------------------
+
+    def strip_metals(self) -> Molecule:
+        """Return a new Molecule with all metal atoms (and their bonds)
+        removed.  Returns self unchanged if no metals are present."""
+        non_metal_indices = [i for i, a in enumerate(self.atoms) if not a.is_metal]
+        if len(non_metal_indices) == self.n_atoms:
+            return self  # nothing to strip
+        return self._subset(non_metal_indices)
+
+    # -- combining (continued) ---------------------------------------------
 
     @classmethod
     def merge(cls, molecules: list[Molecule]) -> Molecule:
@@ -443,20 +467,30 @@ def split_system(
     # --- step 4: classify & write individual SDFs ---
     lig_idx = 0
     cof_idx = 0
+    non_metal_components: list[Molecule] = []
     for comp in components:
-        label = classify_molecule(comp, pdb_atoms, cfg.coord_match_tol,
+        # Strip metal atoms – they belong in the PDB, not SDFs
+        comp_no_metals = comp.strip_metals()
+        if comp_no_metals.n_atoms == 0:
+            log.info("  Skipping component (%d atoms) – metals only", comp.n_atoms)
+            continue
+        non_metal_components.append(comp_no_metals)
+
+        label = classify_molecule(comp_no_metals, pdb_atoms, cfg.coord_match_tol,
                                   ligand_resname=ligand_resname)
         if label == "lig":
             lig_idx += 1
-            write_sdf([comp], out_dir / f"lig_fixed_{lig_idx}.sdf")
+            write_sdf([comp_no_metals], out_dir / f"lig_fixed_{lig_idx}.sdf")
         else:
             cof_idx += 1
-            write_sdf([comp], out_dir / f"cof_fixed_{cof_idx}.sdf")
+            write_sdf([comp_no_metals], out_dir / f"cof_fixed_{cof_idx}.sdf")
 
     log.info("Wrote %d ligand(s) and %d cofactor(s)", lig_idx, cof_idx)
 
-    # Receptor PDB (system minus ligand/cofactor atoms)
-    all_ligand_coords = mol.coord_matrix
+    # Receptor PDB (system minus ligand/cofactor atoms, but keep metals)
+    all_ligand_coords = np.vstack(
+        [c.coord_matrix for c in non_metal_components]
+    ) if non_metal_components else np.empty((0, 3))
     pdb_lines = read_pdb_lines(pdb_path)
     write_receptor_pdb(
         pdb_lines, all_ligand_coords,
