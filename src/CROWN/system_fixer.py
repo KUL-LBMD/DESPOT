@@ -35,7 +35,7 @@ METAL_ELEMENTS: set[str] = {
     "Bi", "Th", "U",
 }
 
-METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD', 'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43']
+METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD']
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -383,18 +383,41 @@ def write_receptor_pdb(
                     float(line[38:46]),
                     float(line[46:54]),
                 ])
+
                 dists = np.linalg.norm(ligand_coords - coord, axis=1)
-                if dists.min() < tol:
+                if dists.size != 0 and dists.min() < tol:
                     continue  # this atom belongs to a ligand – skip
 
             elif line.startswith('TER') and prev_line is not None and prev_line.startswith('TER'):
                 continue
+
+            element = line[76:78]
+            shifted_element = line[75:77]
+            if len(element.strip()) == 1 and shifted_element.strip() == 'FE':
+                line = (line[:75] + ' ' + shifted_element.ljust(2) + line[78:])
 
             fh.write(line)
             prev_line = line
             kept += 1
 
     log.info("Wrote receptor PDB (%d lines) → %s", kept, path)
+
+def get_component_resnames(
+    mol: Molecule,
+    pdb_atoms: list[PDBAtom],
+    tol: float,
+) -> set[str]:
+    """Return the set of PDB residue names matched by this molecule."""
+    pdb_coords = pdb_coord_matrix(pdb_atoms)
+    resnames: set[str] = set()
+
+    for atom in mol.atoms:
+        dists = np.linalg.norm(pdb_coords - atom.coord, axis=1)
+        nearest_idx = int(dists.argmin())
+        if dists[nearest_idx] < tol:
+            resnames.add(pdb_atoms[nearest_idx].resname)
+
+    return resnames
 
 
 def classify_molecule(
@@ -443,6 +466,7 @@ def split_system(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # --- load & merge ---
+    log.info(f'Working on {pdb_path}')
     pdb_atoms = read_pdb_heavy_atoms(pdb_path)
     pdb_coords = pdb_coord_matrix(pdb_atoms)
     mol = read_sdf_directory(sdf_dir)
@@ -476,6 +500,16 @@ def split_system(
         if comp_no_metals.n_atoms == 0:
             log.info("  Skipping component (%d atoms) – metals only", comp.n_atoms)
             continue
+
+        resnames = get_component_resnames(
+            comp_no_metals,
+            pdb_atoms,
+            cfg.coord_match_tol,
+        )
+
+        if any(r in METALLOCOFACTOR_LIST for r in resnames):
+            continue
+
         non_metal_components.append(comp_no_metals)
 
         label = classify_molecule(comp_no_metals, pdb_atoms, cfg.coord_match_tol,

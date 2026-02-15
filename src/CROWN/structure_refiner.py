@@ -37,12 +37,33 @@ STANDARD_AMINO_ACIDS = {
     'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'CYM', 'GLN', 'GLU', 'GLY',
     'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 
     'TRP', 'TYR', 'VAL', 'HIE', 'HIP', 'HID', 'HSD', 'HSE', 'HSP',
-    'ACE', 'NME', 'UNK', 'UNL'
+    'ACE', 'NME'
 }
+
+WATER_NAMES = {'HOH', 'WAT', 'TIP3', 'SOL', 'OPC'}
+METALLOCOFACTORS_AMBER = {'HEM', 'SF4', 'MGD'}
+METALLOCOFACTORS_CHARMM = {'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43'}
 
 # ============================================================================
 
-WATER_NAMES = {'HOH', 'WAT', 'TIP3', 'SOL', 'OPC'}
+def find_cofactors(pdb_path):
+	"""
+	Find all metallocofactor entries in a pdb file
+	"""
+
+	amber_residues = set()
+	charmm_residues = set()
+
+	with open(pdb_path, 'r') as f:
+		for line in f:
+			if line.startswith(('ATOM', 'HETATM')):
+				resname = line[17:20].strip()
+				if resname in METALLOCOFACTORS_AMBER:
+					amber_residues.add(resname)
+				elif resname in METALLOCOFACTORS_CHARMM:
+					charmm_residues.add(resname)
+
+	return amber_residues, charmm_residues
 
 def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	"""Protonate a ligand SDF file at the given pH."""
@@ -102,6 +123,180 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	writer.write(protonated_h)
 	writer.close()
 	logger.info(f"Protonated ligand written to {out_sdf}")
+
+def add_peptide_bond_to_hetatm(topology, resnames={'MHS'}):
+    """Add peptide bonds between standard residues and adjacent HETATM residues."""
+    residues = list(topology.residues())
+    for i, res in enumerate(residues):
+        if res.name not in resnames:
+            continue
+        atoms_by_name = {a.name: a for a in res.atoms()}
+        # Bond to previous residue's C
+        if i > 0 and 'N' in atoms_by_name:
+            prev_atoms = {a.name: a for a in residues[i-1].atoms()}
+            if 'C' in prev_atoms:
+                topology.addBond(prev_atoms['C'], atoms_by_name['N'])
+        # Bond to next residue's N
+        if i < len(residues) - 1 and 'C' in atoms_by_name:
+            next_atoms = {a.name: a for a in residues[i+1].atoms()}
+            if 'N' in next_atoms:
+                topology.addBond(atoms_by_name['C'], next_atoms['N'])
+
+def add_bonds(topology, positions, resname_set):
+    """Add missing bonds for residues based on interatomic distances."""
+    for residue in topology.residues():
+        for resname in resname_set:
+            if residue.name != resname:
+                continue
+
+            print(f'{resname} found')
+
+            atoms = list(residue.atoms())
+            pos = np.array([(positions[a.index].x, positions[a.index].y, positions[a.index].z) 
+                        for a in atoms])
+
+            # Collect existing bonds to avoid duplicates
+            existing_bonds = set()
+            for bond in topology.bonds():
+                existing_bonds.add((bond[0].index, bond[1].index))
+                existing_bonds.add((bond[1].index, bond[0].index))
+
+            for i in range(len(atoms)):
+                for j in range(i + 1, len(atoms)):
+
+                    if (atoms[i].index, atoms[j].index) in existing_bonds:
+                        continue
+
+                    dist = np.linalg.norm(pos[i] - pos[j])  # already in nm from OpenMM
+
+                    ei = atoms[i].element.symbol
+                    ej = atoms[j].element.symbol
+
+                    if ei == 'H' and ej == 'H':
+                        continue
+
+                    if ei == 'H' or ej == 'H':
+                        if dist < 0.12:
+                            print('H-bond added')
+                            topology.addBond(atoms[i], atoms[j])
+
+                    # Fe-N bonds are ~2.0 Å
+                    metal_set = {'Fe', 'Mn', 'Mg', 'Ni', 'Zn', 'Cu'}
+                    if ei in metal_set or ej in metal_set:
+                        if dist < 0.22:  # 2.2 Å in nm
+                            print('Metal bond added')
+                            topology.addBond(atoms[i], atoms[j])
+                    # C-C, C-N, C-O bonds are ~1.2-1.55 Å
+                    else:
+                        if dist < 0.18 and not 'H' in (ei, ej):  # 1.8 Å in nm
+                            print(f'Bond added between {ei} and {ej}')
+                            topology.addBond(atoms[i], atoms[j])
+
+def prepare_charmm(pdb_path, resname_set):
+	"""
+	Prepare modeller and force field list for CHARMM
+	"""
+
+	# No capping done for CHARMM, will throw error otherwise
+	Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/protonation/special_residues_charmm.xml')
+
+	fixer = PDBFixer(pdb_path)
+	fixer.findNonstandardResidues()
+
+	for residue, standard_name in fixer.nonstandardResidues:
+		print(f"{residue.name} (chain {residue.chain.id}, #{residue.index}) → {standard_name}")
+
+	fixer.replaceNonstandardResidues()
+	fixer.findMissingResidues()
+	fixer.findMissingAtoms()
+	fixer.addMissingAtoms()
+	fixer.addMissingHydrogens(PH)
+
+	logging.getLogger("openff").setLevel(logging.ERROR)
+	modeller = Modeller(fixer.topology, fixer.positions)
+	add_bonds(modeller.topology, modeller.positions, resname_set)
+
+	modeller.addHydrogens(pH=PH)
+
+	from lxml import etree
+	tree = etree.parse("/home/robin/miniconda3/envs/DESPOT_v2/lib/python3.12/site-packages/openmm/app/data/charmm36_2024.xml")  # the XML containing F430
+	for residue in tree.findall('.//Residue[@name="F430"]'):
+		template_atoms = {a.get('name'): a.get('type') for a in residue.findall('Atom')}
+		template_bonds = [(b.get('atomName1'), b.get('atomName2')) for b in residue.findall('Bond')]
+
+	print(template_atoms)
+	print(template_bonds)
+
+	for res in modeller.topology.residues():
+		if res.name == 'F43':
+			struct_atoms = {a.name: a.element.symbol for a in res.atoms()}
+			break
+
+	print(struct_atoms)
+
+	template_H = {k for k, v in template_atoms.items() if 'H' in k or v.startswith('H')}
+	struct_H = {k for k, v in struct_atoms.items() if v == 'H'}
+
+	print("In template only:", template_H - struct_H)
+	print("In structure only:", struct_H - template_H)
+
+	forcefield_list = ['charmm36_2024.xml', 'charmm36_2024/water.xml']
+
+	return modeller, forcefield_list
+
+def prepare_amber_special(pdb_path, resname_set):
+	"""
+	Prepare modeller and force field list for special AMBER residues
+	"""
+
+	# Add SEQRES with caps
+	tmp_with_seqres = pdb_path.replace('.pdb', '_seqres.pdb')
+	chain_seqs = add_seqres_with_caps(pdb_path, tmp_with_seqres)
+
+	Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/protonation/special_residues_amber.xml')
+
+	fixer = PDBFixer(tmp_with_seqres)
+	fixer.findNonstandardResidues()
+
+	print('Nonstandard residues:')
+	for residue, standard_name in fixer.nonstandardResidues:
+		print(f"{residue.name} (chain {residue.chain.id}, #{residue.index}) → {standard_name}")
+
+	fixer.replaceNonstandardResidues()
+
+	fixer.findMissingResidues()
+	fixer.findMissingAtoms()
+	fixer.addMissingAtoms()
+	fixer.addMissingHydrogens(PH)
+
+	logging.getLogger("openff").setLevel(logging.ERROR)
+	modeller = Modeller(fixer.topology, fixer.positions)
+	print(resname_set)
+
+	modeller.addHydrogens(pH=PH)
+	add_bonds(modeller.topology, modeller.positions, resname_set)
+	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml',
+		f'{DATA_DIR}/CROWN/custom_xml/forcefield/HEM.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/MGD.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/SF4.xml']
+
+	return modeller, forcefield_list
+
+def prepare_amber_regular(pdb_path):
+	# Add SEQRES with caps
+	tmp_with_seqres = pdb_path.replace('.pdb', '_seqres.pdb')
+	chain_seqs = add_seqres_with_caps(pdb_path, tmp_with_seqres)
+
+	fixer = PDBFixer(tmp_with_seqres)
+	fixer.findMissingResidues()
+	fixer.findMissingAtoms()
+	fixer.addMissingAtoms()
+	fixer.addMissingHydrogens(PH)
+
+	logging.getLogger("openff").setLevel(logging.ERROR)
+	modeller = Modeller(fixer.topology, fixer.positions)
+
+	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml']
+
+	return modeller, forcefield_list
 
 def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 	"""
@@ -187,32 +382,29 @@ def refine_system(input_dir):
 			modeller = Modeller(pdb.topology, pdb.positions)
 			toDelete = []
 			for atom in modeller.topology.atoms():
-				if atom.element.symbol == 'H' and atom.residue.name in STANDARD_AMINO_ACIDS:
-					toDelete.append(atom)
-				elif atom.residue.name not in STANDARD_AMINO_ACIDS and atom.residue.name not in WATER_NAMES:
+				if atom.element.symbol == 'H':
 					toDelete.append(atom)
 			if toDelete:
 				modeller.delete(toDelete)
 
 			# Save deprotonated amino-acids PDB
 			protein_only_path = tmp_path.replace('.pdb', '_no_protein_H.pdb')
+			protein_only_path = f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_test.pdb'
 			with open(protein_only_path, 'w') as f:
 				PDBFile.writeFile(modeller.topology, modeller.positions, f)
 
-			# Add SEQRES with caps
-			tmp_with_seqres = protein_only_path.replace('.pdb', '_seqres.pdb')
-			chain_seqs = add_seqres_with_caps(protein_only_path, tmp_with_seqres)
-
-			# Run PDBFixer on protein-only structure
-			fixer = PDBFixer(filename=tmp_with_seqres)
-			fixer.findMissingResidues()
-			fixer.findMissingAtoms()
-			fixer.addMissingAtoms()
-			fixer.addMissingHydrogens(PH)
-
-			# Create modeller from fixed protein
-			logging.getLogger("openff").setLevel(logging.ERROR) #Otherwise a lot of partial charge assigned notifications
-			modeller = Modeller(fixer.topology, fixer.positions)
+			# First check for weird cofactors
+			amber_residues, charmm_residues = find_cofactors(f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb')
+			if amber_residues and charmm_residues:
+				return
+			elif charmm_residues:
+				modeller, forcefield_list = prepare_charmm(protein_only_path, charmm_residues)
+			elif amber_residues:
+				print('Working with amber residues')
+				modeller, forcefield_list = prepare_amber_special(protein_only_path, amber_residues)
+			else:
+				print('Very normal complex')
+				modeller, forcefield_list = prepare_amber_regular(protein_only_path)
 
 			# ====================================================================
                 	# Step 3: Add ligands back with proper parameters
@@ -240,12 +432,17 @@ def refine_system(input_dir):
 					ligand_entries.append((basename, ligand_mol, list(range(offset, offset + n_atoms))))
 
 			# Merged set of all ligand indices (used for KDTree and restraints)
-			all_ligand_indices = set()
+			ligand_indices = set()
 			for _, _, indices in ligand_entries:
-				all_ligand_indices.update(indices)
+				ligand_indices.update(indices)
+
+			mobile_indices = ligand_indices.copy()
+			for residue in modeller.topology.residues():
+				for atom in residue.atoms():
+					mobile_indices.add(atom.index)
 
 			system_generator = SystemGenerator(
-				forcefields=['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml'], # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
+				forcefields=forcefield_list, # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
 				small_molecule_forcefield='openff-2.2.0',
 				molecules=ligand_molecules,
 				cache=f'{tmp_dir}/{input_dir}_db.json'
@@ -260,7 +457,7 @@ def refine_system(input_dir):
 			# Use KDTree for more efficient spatial lookup
 			positions = modeller.positions
 			all_positions_nm = np.array([positions[i].value_in_unit(unit.nanometer) for i in range(len(positions))])
-			ligand_indices_list = sorted(all_ligand_indices)
+			ligand_indices_list = sorted(mobile_indices)
 			ligand_positions_nm = all_positions_nm[ligand_indices_list]
 			ligand_tree = KDTree(ligand_positions_nm)
 
@@ -344,8 +541,8 @@ def refine_system(input_dir):
 
 			# Save minimized structure as PDB (protein/water only, no ligands)
 			pdb_modeller = Modeller(modeller.topology, minimized_positions)
-			ligand_atoms = [atom for atom in pdb_modeller.topology.atoms() if atom.index in all_ligand_indices]
-			pdb_modeller.delete(ligand_atoms)
+			#ligand_atoms = [atom for atom in pdb_modeller.topology.atoms() if atom.index in ligand_indices]
+			#pdb_modeller.delete(ligand_atoms)
 			with open(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir / 'receptor_minimized.pdb', 'w') as f:
 				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
 

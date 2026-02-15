@@ -2,7 +2,7 @@ from src.CROWN.structure_filter import filter_structures
 from src.CROWN.structure_fixer import ComplexFixer
 from src.CROWN.pli_filter import PLI_Filter
 from src.CROWN.system_fixer import split_system
-from src.CROWN.structure_refiner_test import refine_system
+from src.CROWN.structure_refiner import refine_system
 from src.config import DATA_DIR, SOURCE_DB_PATH
 
 import pandas as pd
@@ -28,7 +28,8 @@ def main():
 	"""
 
 	# Step 5: Protonate and energy-minimize
-	refine_system('105m__1__1.a__1.c_1.d_1.c')
+	refine_system('1aa6__1__1.a__1.c_1.d_1.e_1.c')
+	#Parallel(n_jobs = 64, verbose = 10)(delayed(refine_system)(row.basename) for row in df.itertuples())
 
 if __name__ == '__main__':
 	main()

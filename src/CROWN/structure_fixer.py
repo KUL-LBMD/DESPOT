@@ -590,7 +590,8 @@ class OverlapResolver:
                         atom.fullname = new_name
 
         # Check if final ligand chain has more than 10 heavy atoms
-        atom_count = sum(1 for atom in new_chain.get_atoms() if atom.element != 'H')
+        z_chain = model['Z']
+        atom_count = sum(1 for atom in z_chain.get_atoms() if atom.element != 'H')
         return atom_count
 
 class ComplexFixer:

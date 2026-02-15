@@ -28,21 +28,21 @@ def main():
 	"""
 
 	# Step 1: Dataframe subset from original PLInder parquet file
-#	initial_subset = filter_structures()
-#	print('Step 1 done')
+	#initial_subset = filter_structures()
+	#print('Step 1 done')
 
 	# Step 2: fix initial mmCIF structures
-	#complex_fixer = ComplexFixer(initial_subset)
-	#complex_fixer.wrapper(NUM_CORES)
-	#print('Step 2 done')
+#	complex_fixer = ComplexFixer(initial_subset)
+#	complex_fixer.wrapper(NUM_CORES)
+#	print('Step 2 done')
 
 	# Step 3: PLI filter
-#	pli_filter = PLI_Filter(initial_subset)
-#	pli_filter.wrapper(MAXDEV_THRESHOLD, MAX_COUNT)
-#	print('Step 3 done')
+	#pli_filter = PLI_Filter(initial_subset)
+	#pli_filter.wrapper(MAXDEV_THRESHOLD, MAX_COUNT)
+	#print('Step 3 done')
 
 	# Step 4: make fixed systems directory to work with later
-	#os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
+	os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
 
 	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
 	Parallel(n_jobs = 1, verbose = 10)(delayed(split_system)(
@@ -52,7 +52,8 @@ def main():
 		) for row in df.itertuples())
 
 	# Step 5: Protonate and energy-minimize
-	Parallel(n_jobs = 64, verbose = 10)(delayed(refine_system)(row.basename) for row in df.itertuples())
+	#refine_system(6f18__1__1.a__1.b_1.c_1.b)
+	#Parallel(n_jobs = 64, verbose = 10)(delayed(refine_system)(row.basename) for row in df.itertuples())
 
 if __name__ == '__main__':
 	main()
