@@ -7,7 +7,7 @@ import numpy as np
 from scipy.spatial import KDTree
 import re
 
-LIG_LIST = ['LIG', 'HEM', 'MGD', 'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43']
+LIG_LIST = ['LIG', 'HEM', 'MGD']
 
 ### Helper functions ###
 def icp(mobile, target, max_iters = 100, tolerance = 1e-6):
@@ -129,7 +129,7 @@ def parse_pdb(file_path):
 					numbers = re.findall(r'[-+]?\d*\.\d+|\d+', coord_str)
 					x, y, z = map(float, numbers[:3])
 
-				if res_name in LIG_LIST and chain_id == 'Z':
+				if res_name in LIG_LIST:
 					lig_coords_list.append([x,y,z])
 
 				else:

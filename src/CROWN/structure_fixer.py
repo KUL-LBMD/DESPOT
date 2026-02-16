@@ -5,6 +5,8 @@ from Bio.PDB.Chain import Chain
 from Bio.PDB.Residue import Residue
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict
 from Bio import PDB
+from pdbfixer import PDBFixer
+from openmm.app import PDBFile
 import numpy as np
 import pandas as pd
 import os
@@ -24,7 +26,121 @@ COMMON_ARTIFACTS = ['PEG', 'CRY', 'EDO', 'ACT', 'DMS', 'MES', 'GOL', 'EPE', 'BU1
 
 VALID_BOND_ATOMS = {'C', 'N', 'O', 'S', 'P', 'B'}
 
-METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD', 'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43']
+METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD']
+
+# ---------------------------------------------------------------------------
+# Nonstandard-residue fixing (PDBFixer)
+# ---------------------------------------------------------------------------
+
+def _replace_selenocysteine(input_path, output_path, ligand_coords):
+
+    """Replace selenocysteine (SEC) → cysteine (CYS) at the PDB text level.
+
+    PDBFixer does not flag SEC as nonstandard, so this handles it explicitly.
+    The selenium (SE) atom is renamed to the cysteine sulfur-gamma (SG) and
+    the element column is updated from SE → S.
+
+    Applies the same proximity rule: if *any* SEC atom is within
+    *distance_cutoff* Å of a ligand atom the file is left untouched and
+    ``False`` is returned.
+    """
+
+    with open(input_path, 'r') as f:
+        lines = f.readlines()
+
+    # Identify ATOM/HETATM lines belonging to SEC residues
+    sec_line_indices = [
+        i for i, line in enumerate(lines)
+        if line.startswith(("ATOM", "HETATM")) and line[17:20].strip() == "SEC"
+    ]
+
+    if sec_line_indices:
+        # Distance check
+        if ligand_coords.size > 0:
+            for idx in sec_line_indices:
+                line = lines[idx]
+                coord = np.array([
+                    float(line[30:38]),
+                    float(line[38:46]),
+                    float(line[46:54]),
+                ])
+                dists = np.linalg.norm(ligand_coords - coord, axis=1)
+                if dists.min() < 6.0:
+                    return
+
+    # Safe to replace: SEC → CYS, SE atom → SG, element SE → S
+    for idx in sec_line_indices:
+        line = lines[idx]
+        # Residue name (cols 17-20)
+        line = line[:17] + "CYS" + line[20:]
+        # Atom name: replace SE with SG (cols 12-16)
+        atom_name = line[12:16].strip()
+        if atom_name == "SE":
+            line = line[:12] + " SG " + line[16:]
+            # Element column (cols 76-78)
+            if len(line.rstrip("\n")) >= 78:
+                line = line[:76] + " S" + line[78:]
+            elif len(line.rstrip("\n")) >= 77:
+                line = line[:76] + " S\n"
+        lines[idx] = line
+
+    with open(output_path, "w") as fh:
+        fh.writelines(lines)
+    return
+
+
+def fix_nonstandard_residues(input_path, output_path, ligand_coords):
+    """Use PDBFixer to find nonstandard residues in *receptor_pdb*.
+
+    Selenocysteine (SEC) is handled first as a special case because PDBFixer
+    does not recognise it as nonstandard.
+
+    If **all** nonstandard residues are farther than *distance_cutoff* Å from
+    every atom in *ligand_coords*, they are silently replaced by their standard
+    counterparts and the PDB is overwritten in-place.
+
+    If any nonstandard residue has at least one atom within *distance_cutoff* Å
+    of a ligand atom, the file is left untouched and the function returns
+    ``False`` so the caller can abort.
+
+    Returns
+    -------
+    bool
+        ``True`` if residues were replaced (or none were found);
+        ``False`` if a nonstandard residue was too close to a ligand.
+    """
+    # --- SEC → CYS (not detected by PDBFixer) ---
+    tmp_path = input_path.replace('.pdb', '_sec.pdb')
+    _replace_selenocysteine(input_path, tmp_path, ligand_coords)
+    if not os.path.isfile(tmp_path):
+        return
+
+    fixer = PDBFixer(filename=tmp_path)
+    fixer.findNonstandardResidues()
+
+    if fixer.nonstandardResidues:
+
+        # Check each nonstandard residue for proximity to any ligand atom
+        for residue, _replacement in fixer.nonstandardResidues:
+            for atom in residue.atoms():
+                atom_idx = atom.index
+                # PDBFixer positions are openmm Quantity objects in nanometres
+                pos = fixer.positions[atom_idx]
+                atom_coord = np.array([
+                    pos.x * 10.0,   # nm → Å
+                    pos.y * 10.0,
+                    pos.z * 10.0,
+                ])
+                dists = np.linalg.norm(ligand_coords - atom_coord, axis=1)
+                if dists.min() < 6.0:
+                    return
+
+        # All nonstandard residues are far from ligands – safe to replace
+        fixer.replaceNonstandardResidues()
+
+    with open(output_path, "w") as fh:
+        PDBFile.writeFile(fixer.topology, fixer.positions, fh)
+    return
 
 @dataclass
 class OccupancyInfo:
@@ -659,13 +775,15 @@ class ComplexFixer:
             self.overlap_resolver.merge_bonded_chains(structure, bonds_to_add)
             atom_count = self.overlap_resolver.rename_ligand(structure)
 
+            ligand_coords = np.array([atom.get_vector().get_array() for model in structure for chain in model if chain.id == 'Z' for residue in chain for atom in residue])
+
             if atom_count >= 10 and atom_count <= 100:
                 # Step 8: save output
                 io = PDBIO()
                 io.set_structure(structure)
+                io.save(f'{tmp_dir}/{basename}.pdb')
 
-                output_path = f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb'
-                io.save(output_path)
+                fix_nonstandard_residues(f'{tmp_dir}/{basename}.pdb', f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb', ligand_coords)
 
     def wrapper(self, num_cores = 1):
         """

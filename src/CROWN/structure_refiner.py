@@ -124,24 +124,6 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	writer.close()
 	logger.info(f"Protonated ligand written to {out_sdf}")
 
-def add_peptide_bond_to_hetatm(topology, resnames={'MHS'}):
-    """Add peptide bonds between standard residues and adjacent HETATM residues."""
-    residues = list(topology.residues())
-    for i, res in enumerate(residues):
-        if res.name not in resnames:
-            continue
-        atoms_by_name = {a.name: a for a in res.atoms()}
-        # Bond to previous residue's C
-        if i > 0 and 'N' in atoms_by_name:
-            prev_atoms = {a.name: a for a in residues[i-1].atoms()}
-            if 'C' in prev_atoms:
-                topology.addBond(prev_atoms['C'], atoms_by_name['N'])
-        # Bond to next residue's N
-        if i < len(residues) - 1 and 'C' in atoms_by_name:
-            next_atoms = {a.name: a for a in residues[i+1].atoms()}
-            if 'N' in next_atoms:
-                topology.addBond(atoms_by_name['C'], next_atoms['N'])
-
 def add_bonds(topology, positions, resname_set):
     """Add missing bonds for residues based on interatomic distances."""
     for residue in topology.residues():
@@ -201,12 +183,6 @@ def prepare_charmm(pdb_path, resname_set):
 	Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/protonation/special_residues_charmm.xml')
 
 	fixer = PDBFixer(pdb_path)
-	fixer.findNonstandardResidues()
-
-	for residue, standard_name in fixer.nonstandardResidues:
-		print(f"{residue.name} (chain {residue.chain.id}, #{residue.index}) → {standard_name}")
-
-	fixer.replaceNonstandardResidues()
 	fixer.findMissingResidues()
 	fixer.findMissingAtoms()
 	fixer.addMissingAtoms()
@@ -217,28 +193,6 @@ def prepare_charmm(pdb_path, resname_set):
 	add_bonds(modeller.topology, modeller.positions, resname_set)
 
 	modeller.addHydrogens(pH=PH)
-
-	from lxml import etree
-	tree = etree.parse("/home/robin/miniconda3/envs/DESPOT_v2/lib/python3.12/site-packages/openmm/app/data/charmm36_2024.xml")  # the XML containing F430
-	for residue in tree.findall('.//Residue[@name="F430"]'):
-		template_atoms = {a.get('name'): a.get('type') for a in residue.findall('Atom')}
-		template_bonds = [(b.get('atomName1'), b.get('atomName2')) for b in residue.findall('Bond')]
-
-	print(template_atoms)
-	print(template_bonds)
-
-	for res in modeller.topology.residues():
-		if res.name == 'F43':
-			struct_atoms = {a.name: a.element.symbol for a in res.atoms()}
-			break
-
-	print(struct_atoms)
-
-	template_H = {k for k, v in template_atoms.items() if 'H' in k or v.startswith('H')}
-	struct_H = {k for k, v in struct_atoms.items() if v == 'H'}
-
-	print("In template only:", template_H - struct_H)
-	print("In structure only:", struct_H - template_H)
 
 	forcefield_list = ['charmm36_2024.xml', 'charmm36_2024/water.xml']
 
@@ -256,13 +210,6 @@ def prepare_amber_special(pdb_path, resname_set):
 	Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/protonation/special_residues_amber.xml')
 
 	fixer = PDBFixer(tmp_with_seqres)
-	fixer.findNonstandardResidues()
-
-	print('Nonstandard residues:')
-	for residue, standard_name in fixer.nonstandardResidues:
-		print(f"{residue.name} (chain {residue.chain.id}, #{residue.index}) → {standard_name}")
-
-	fixer.replaceNonstandardResidues()
 
 	fixer.findMissingResidues()
 	fixer.findMissingAtoms()
@@ -271,7 +218,6 @@ def prepare_amber_special(pdb_path, resname_set):
 
 	logging.getLogger("openff").setLevel(logging.ERROR)
 	modeller = Modeller(fixer.topology, fixer.positions)
-	print(resname_set)
 
 	modeller.addHydrogens(pH=PH)
 	add_bonds(modeller.topology, modeller.positions, resname_set)
@@ -438,14 +384,14 @@ def refine_system(input_dir):
 
 			mobile_indices = ligand_indices.copy()
 			for residue in modeller.topology.residues():
-				for atom in residue.atoms():
-					mobile_indices.add(atom.index)
+				if residue.name in {'HEM', 'MGD'}:
+					for atom in residue.atoms():
+						mobile_indices.add(atom.index)
 
 			system_generator = SystemGenerator(
 				forcefields=forcefield_list, # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
 				small_molecule_forcefield='openff-2.2.0',
 				molecules=ligand_molecules,
-				cache=f'{tmp_dir}/{input_dir}_db.json'
 			)
 
 			system = system_generator.create_system(modeller.topology)
@@ -527,6 +473,9 @@ def refine_system(input_dir):
 
 			simulation = Simulation(modeller.topology, system, integrator, platform, properties)
 			simulation.context.setPositions(modeller.positions)
+
+			pos_before = np.array(modeller.positions.value_in_unit(unit.angstrom))
+
 			simulation.minimizeEnergy(maxIterations = MINIMIZATION_STEPS)
 
 			# ====================================================================
@@ -536,15 +485,20 @@ def refine_system(input_dir):
 			state = simulation.context.getState(getEnergy=True, getPositions=True)
 			minimized_positions = state.getPositions()
 
+			pos_after = state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)
+			rmsd = calc_rmsd(pos_before, pos_after, mobile_atoms)
+
 			# Save minimized structure as pdb and .mol2 files
 			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
 
 			# Save minimized structure as PDB (protein/water only, no ligands)
 			pdb_modeller = Modeller(modeller.topology, minimized_positions)
-			#ligand_atoms = [atom for atom in pdb_modeller.topology.atoms() if atom.index in ligand_indices]
-			#pdb_modeller.delete(ligand_atoms)
-			with open(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir / 'receptor_minimized.pdb', 'w') as f:
+			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_minimized.pdb'
+			mol2_path = pdb_path.replace('.pdb', '.mol2')
+			with open(pdb_path, 'w') as f:
 				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
+
+			subprocess.run(['obabel', '-isdf', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 			# Save each ligand as a separate mol2 with minimized coordinates
 			for basename, ligand_mol, atom_indices in ligand_entries:
@@ -557,9 +511,13 @@ def refine_system(input_dir):
 				ligand_mol.to_file(sdf_path, file_format='SDF')
 				subprocess.run(['obabel', '-isdf', sdf_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+			logger.removeHandler(handler)
+			handler.close()
+
+			return input_dir, rmsd
+
 	except Exception as e:
 		logger.exception(f"Refinement failed for {input_dir}")
-
-	finally:
 		logger.removeHandler(handler)
 		handler.close()
+		return None, None
