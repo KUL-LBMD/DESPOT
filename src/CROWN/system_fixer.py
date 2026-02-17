@@ -35,6 +35,8 @@ METAL_ELEMENTS: set[str] = {
     "Bi", "Th", "U",
 }
 
+METAL_ELEMENTS |= {x.upper() for x in METAL_ELEMENTS} # Add uppercase variants for better detection
+
 METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD']
 
 # ---------------------------------------------------------------------------

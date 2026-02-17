@@ -46,6 +46,30 @@ METALLOCOFACTORS_CHARMM = {'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43'}
 
 # ============================================================================
 
+def calc_rmsd(pos_ref, pos_target, atom_indices):
+	"""
+	Computes RMSD (in angstrom) between 2 coordinate arrays.
+
+	Parameters
+	----------
+
+	pos_ref [N, 3]: reference coordinates
+	pos_target [N, 3]: updated coordinates
+	atom_indices [L]: subset of atom indices to use
+
+	Returns
+	-------
+
+	rmsd [float]
+	"""
+
+	if atom_indices is not None:
+		pos_ref = pos_ref[atom_indices]
+		pos_target = pos_target[atom_indices]
+
+	diff = pos_ref - pos_target
+	return float(np.sqrt((diff**2).sum(axis=1).mean()))
+
 def find_cofactors(pdb_path):
 	"""
 	Find all metallocofactor entries in a pdb file
@@ -159,19 +183,16 @@ def add_bonds(topology, positions, resname_set):
 
                     if ei == 'H' or ej == 'H':
                         if dist < 0.12:
-                            print('H-bond added')
                             topology.addBond(atoms[i], atoms[j])
 
                     # Fe-N bonds are ~2.0 Å
                     metal_set = {'Fe', 'Mn', 'Mg', 'Ni', 'Zn', 'Cu'}
                     if ei in metal_set or ej in metal_set:
                         if dist < 0.22:  # 2.2 Å in nm
-                            print('Metal bond added')
                             topology.addBond(atoms[i], atoms[j])
                     # C-C, C-N, C-O bonds are ~1.2-1.55 Å
                     else:
                         if dist < 0.18 and not 'H' in (ei, ej):  # 1.8 Å in nm
-                            print(f'Bond added between {ei} and {ej}')
                             topology.addBond(atoms[i], atoms[j])
 
 def prepare_charmm(pdb_path, resname_set):
@@ -478,6 +499,8 @@ def refine_system(input_dir):
 
 			simulation.minimizeEnergy(maxIterations = MINIMIZATION_STEPS)
 
+			print(f'{input_dir} - Energy minimization done')
+
 			# ====================================================================
 			# STEP 7: Save outputs
 			# ====================================================================
@@ -488,6 +511,8 @@ def refine_system(input_dir):
 			pos_after = state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)
 			rmsd = calc_rmsd(pos_before, pos_after, mobile_atoms)
 
+			print(f'{input_dir} - RMSD {rmsd}')
+
 			# Save minimized structure as pdb and .mol2 files
 			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
 
@@ -497,6 +522,8 @@ def refine_system(input_dir):
 			mol2_path = pdb_path.replace('.pdb', '.mol2')
 			with open(pdb_path, 'w') as f:
 				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
+
+			print(f'{input_dir} - output file written')
 
 			subprocess.run(['obabel', '-isdf', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -517,6 +544,9 @@ def refine_system(input_dir):
 			return input_dir, rmsd
 
 	except Exception as e:
+
+		print(e)
+
 		logger.exception(f"Refinement failed for {input_dir}")
 		logger.removeHandler(handler)
 		handler.close()
