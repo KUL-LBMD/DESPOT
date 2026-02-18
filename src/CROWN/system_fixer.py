@@ -376,6 +376,7 @@ def write_receptor_pdb(
 
     kept = 0
     prev_line = None
+    atom_line = None
 
     with open(path, "w") as fh:
         for line in pdb_lines:
@@ -390,13 +391,13 @@ def write_receptor_pdb(
                 if dists.size != 0 and dists.min() < tol:
                     continue  # this atom belongs to a ligand – skip
 
+                atom_line = line
+
             elif line.startswith('TER') and prev_line is not None and prev_line.startswith('TER'):
                 continue
 
-            element = line[76:78]
-            shifted_element = line[75:77]
-            if len(element.strip()) == 1 and shifted_element.strip() == 'FE':
-                line = (line[:75] + ' ' + shifted_element.ljust(2) + line[78:])
+            elif line.startswith('TER') and atom_line is None:
+                continue
 
             fh.write(line)
             prev_line = line

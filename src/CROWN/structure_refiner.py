@@ -142,6 +142,8 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 
 	# Add explicit Hs with 3D coords
 	protonated_h = Chem.AddHs(protonated, addCoords=True)
+	formal_charge = Chem.GetFormalCharge(protonated_h)
+	logger.info(f'Formal charge: {formal_charge}')
 
 	writer = Chem.SDWriter(out_sdf)
 	writer.write(protonated_h)
@@ -224,17 +226,9 @@ def prepare_amber_special(pdb_path, resname_set):
 	Prepare modeller and force field list for special AMBER residues
 	"""
 
-	# Add SEQRES with caps
-	tmp_with_seqres = pdb_path.replace('.pdb', '_seqres.pdb')
-	chain_seqs = add_seqres_with_caps(pdb_path, tmp_with_seqres)
-
 	Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/protonation/special_residues_amber.xml')
+	fixer = PDBFixer(pdb_path)
 
-	fixer = PDBFixer(tmp_with_seqres)
-
-	fixer.findMissingResidues()
-	fixer.findMissingAtoms()
-	fixer.addMissingAtoms()
 	fixer.addMissingHydrogens(PH)
 
 	logging.getLogger("openff").setLevel(logging.ERROR)
@@ -242,67 +236,22 @@ def prepare_amber_special(pdb_path, resname_set):
 
 	modeller.addHydrogens(pH=PH)
 	add_bonds(modeller.topology, modeller.positions, resname_set)
-	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml',
+	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/opc3.xml',
 		f'{DATA_DIR}/CROWN/custom_xml/forcefield/HEM.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/MGD.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/SF4.xml']
 
 	return modeller, forcefield_list
 
 def prepare_amber_regular(pdb_path):
-	# Add SEQRES with caps
-	tmp_with_seqres = pdb_path.replace('.pdb', '_seqres.pdb')
-	chain_seqs = add_seqres_with_caps(pdb_path, tmp_with_seqres)
 
-	fixer = PDBFixer(tmp_with_seqres)
-	fixer.findMissingResidues()
-	fixer.findMissingAtoms()
-	fixer.addMissingAtoms()
+	fixer = PDBFixer(pdb_path)
 	fixer.addMissingHydrogens(PH)
 
 	logging.getLogger("openff").setLevel(logging.ERROR)
 	modeller = Modeller(fixer.topology, fixer.positions)
 
-	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/lipid21.xml', 'amber19/opc3.xml']
+	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/opc3.xml']
 
 	return modeller, forcefield_list
-
-def add_seqres_with_caps(input_pdb: str, output_pdb: str):
-	"""
-	Add SEQRES records with ACE/NME caps to a PDB file.
-	PDBFixer will then detect these as 'missing' and build them.
-	"""
-
-	# First, read the structure to get chain sequences
-	pdb = PDBFile(input_pdb)
-
-	# Build sequence for each chain
-	chain_sequences = {}
-	for chain in pdb.topology.chains():
-		residues = list(chain.residues())
-		protein_residues = [r for r in residues if r.name in STANDARD_AMINO_ACIDS]
-
-		if protein_residues:
-			# Add ACE at start, NME at end
-			seq = ['ACE'] + [r.name for r in protein_residues] + ['NME']
-			chain_sequences[chain.id] = seq
-
-	# Now write modified PDB with SEQRES records
-	with open(input_pdb, 'r') as f_in, open(output_pdb, 'w') as f_out:
-		# First write SEQRES records for each chain
-		for chain_id, seq in chain_sequences.items():
-			# SEQRES records: max 13 residues per line
-			for i in range(0, len(seq), 13):
-				chunk = seq[i:i+13]
-				line_num = (i // 13) + 1
-				seqres_line = f"SEQRES {line_num:>3} {chain_id} {len(seq):>4}  "
-				seqres_line += " ".join(f"{res:>3}" for res in chunk)
-				f_out.write(seqres_line + '\n')
-
-		# Then copy the rest of the file (skip existing SEQRES lines)
-		for line in f_in:
-			if not line.startswith('SEQRES'):
-				f_out.write(line)
-
-	return chain_sequences
 
 def refine_system(input_dir):
 	"""
@@ -322,11 +271,8 @@ def refine_system(input_dir):
 	logger.addHandler(handler)
 
 	try:
-
 		with tempfile.TemporaryDirectory() as tmp_dir:
-
 			logger.info(f"Processing {input_dir}")
-
 			for filename in os.listdir(f'{DATA_DIR}/CROWN/systems/{input_dir}'):
 				if filename.endswith('.sdf'):
 					basename = filename[:-4]
@@ -339,39 +285,17 @@ def refine_system(input_dir):
 			# Step 2: Create protein-only structure and run PDBFixer
 			# ====================================================================
 
-			pdb = PDBFile(f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb')
-			# Remove protein hydrogens using Modeller
-			tmp_path = os.path.join(tmp_dir, 'receptor.pdb')
-			with open(tmp_path, 'w') as tmp:
-				PDBFile.writeFile(pdb.topology, pdb.positions, tmp)
-
-			# Load with Modeller to remove protein hydrogens
-			modeller = Modeller(pdb.topology, pdb.positions)
-			toDelete = []
-			for atom in modeller.topology.atoms():
-				if atom.element.symbol == 'H':
-					toDelete.append(atom)
-			if toDelete:
-				modeller.delete(toDelete)
-
-			# Save deprotonated amino-acids PDB
-			protein_only_path = tmp_path.replace('.pdb', '_no_protein_H.pdb')
-			protein_only_path = f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_test.pdb'
-			with open(protein_only_path, 'w') as f:
-				PDBFile.writeFile(modeller.topology, modeller.positions, f)
-
 			# First check for weird cofactors
-			amber_residues, charmm_residues = find_cofactors(f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb')
+			pdb_path = f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb'
+			amber_residues, charmm_residues = find_cofactors(pdb_path)
 			if amber_residues and charmm_residues:
 				return
 			elif charmm_residues:
-				modeller, forcefield_list = prepare_charmm(protein_only_path, charmm_residues)
+				modeller, forcefield_list = prepare_charmm(pdb_path, charmm_residues)
 			elif amber_residues:
-				print('Working with amber residues')
-				modeller, forcefield_list = prepare_amber_special(protein_only_path, amber_residues)
+				modeller, forcefield_list = prepare_amber_special(pdb_path, amber_residues)
 			else:
-				print('Very normal complex')
-				modeller, forcefield_list = prepare_amber_regular(protein_only_path)
+				modeller, forcefield_list = prepare_amber_regular(pdb_path)
 
 			# ====================================================================
                 	# Step 3: Add ligands back with proper parameters
@@ -399,15 +323,18 @@ def refine_system(input_dir):
 					ligand_entries.append((basename, ligand_mol, list(range(offset, offset + n_atoms))))
 
 			# Merged set of all ligand indices (used for KDTree and restraints)
+			all_atoms = list(modeller.topology.atoms())
+
 			ligand_indices = set()
 			for _, _, indices in ligand_entries:
-				ligand_indices.update(indices)
+				ligand_indices.update(i for i in indices if all_atoms[i].element.symbol != 'H')
 
 			mobile_indices = ligand_indices.copy()
 			for residue in modeller.topology.residues():
-				if residue.name in {'HEM', 'MGD'}:
+				if residue.name in {'HEM', 'MGD', 'SF4'}:
 					for atom in residue.atoms():
-						mobile_indices.add(atom.index)
+						if atom.element.symbol != 'H':
+							mobile_indices.add(atom.index)
 
 			system_generator = SystemGenerator(
 				forcefields=forcefield_list, # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
@@ -430,7 +357,7 @@ def refine_system(input_dir):
 
 			distances, _ = ligand_tree.query(all_positions_nm, k=1)  # nearest ligand atom
 			mobile_mask = distances <= MOBILE_RADIUS
-			mobile_atoms = set(np.where(mobile_mask)[0].tolist()) # atom indices where distance smaller than restraint radius
+			mobile_atoms = {i for i in np.where(mobile_mask)[0].tolist() if all_atoms[i].element.symbol != 'H'}
 
 			# ====================================================================
                 	# STEP 5: Add restraints to both mobile and non-mobile atoms
@@ -466,10 +393,6 @@ def refine_system(input_dir):
 			for atom in modeller.topology.atoms():
 				pos = positions[atom.index].value_in_unit(unit.nanometers)
 
-				# Leave hydrogens and water atoms fully unrestrained
-				if atom.element.symbol == 'H' or atom.residue.name in WATER_NAMES:
-					continue
-
 				if atom.index not in mobile_atoms:
 					nonmobile_restraint.addParticle(atom.index, pos)
 				else:
@@ -499,8 +422,6 @@ def refine_system(input_dir):
 
 			simulation.minimizeEnergy(maxIterations = MINIMIZATION_STEPS)
 
-			print(f'{input_dir} - Energy minimization done')
-
 			# ====================================================================
 			# STEP 7: Save outputs
 			# ====================================================================
@@ -509,9 +430,8 @@ def refine_system(input_dir):
 			minimized_positions = state.getPositions()
 
 			pos_after = state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)
-			rmsd = calc_rmsd(pos_before, pos_after, mobile_atoms)
-
-			print(f'{input_dir} - RMSD {rmsd}')
+			rmsd = calc_rmsd(pos_before, pos_after, sorted(mobile_atoms))
+			logger.info(f'{input_dir} - RMSD {rmsd}')
 
 			# Save minimized structure as pdb and .mol2 files
 			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
@@ -522,9 +442,6 @@ def refine_system(input_dir):
 			mol2_path = pdb_path.replace('.pdb', '.mol2')
 			with open(pdb_path, 'w') as f:
 				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
-
-			print(f'{input_dir} - output file written')
-
 			subprocess.run(['obabel', '-isdf', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 			# Save each ligand as a separate mol2 with minimized coordinates
@@ -544,8 +461,6 @@ def refine_system(input_dir):
 			return input_dir, rmsd
 
 	except Exception as e:
-
-		print(e)
 
 		logger.exception(f"Refinement failed for {input_dir}")
 		logger.removeHandler(handler)

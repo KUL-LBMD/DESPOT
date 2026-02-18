@@ -31,7 +31,6 @@ def filter_structures():
 		& (df['ligand_is_artifact'] == False)
 		& (df['ligand_is_covalent'] == False)
 		& (df['ligand_num_unresolved_heavy_atoms'] == 0)
-		& (df['ligand_num_neighboring_ppi_atoms_within_8A_of_gap'] == 0) ### No missing protein atoms close to pocket
 		& (df['entry_determination_method'] == 'X-RAY DIFFRACTION')
 		& (df['entry_resolution'] <= 3.0)
 		& (df['system_ligand_validation_average_rsr'] < 0.3)
@@ -44,6 +43,6 @@ def filter_structures():
 	filtered_subset = subset[columns_to_select].copy()
 
 	# Save metadata
-	filtered_subset.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'structure_filter_pass.csv', index = False)
+	filtered_subset.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'structure_filter_pass.csv', index = False, float_format = '%.3f')
 
 	return filtered_subset

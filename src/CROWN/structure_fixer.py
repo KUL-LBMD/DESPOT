@@ -18,129 +18,171 @@ import subprocess
 
 from joblib import Parallel, delayed
 
-STANDARD_AA = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
-               'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+STANDARD_AA = {'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'CYM', 'GLN', 'GLU', 'GLY',
+    'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 
+    'TRP', 'TYR', 'VAL', 'HIE', 'HIP', 'HID', 'HSD', 'HSE', 'HSP'}
 
 COMMON_ARTIFACTS = ['PEG', 'CRY', 'EDO', 'ACT', 'DMS', 'MES', 'GOL', 'EPE', 'BU1', 'BCN',
                     'PL9', '15P', 'P6G', 'MPD', 'PG4', 'TRS', 'PGE', '1PE', 'ACY']
 
 VALID_BOND_ATOMS = {'C', 'N', 'O', 'S', 'P', 'B'}
 
-METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD']
+METALLOCOFACTORS = {'HEM', 'SF4', 'MGD'}
+
+FIXED_RESIDUES = STANDARD_AA | METALLOCOFACTORS | {'LIG', 'HOH', 'WAT', 'TIP3', 'SOL', 'OPC', 'ACE', 'NME'}
+CUSTOM_SUBSTITUTIONS = {'SEC': 'CYS', '0A8': 'CYS'}
+SHELL_RADIUS = 6.0
 
 # ---------------------------------------------------------------------------
 # Nonstandard-residue fixing (PDBFixer)
 # ---------------------------------------------------------------------------
 
-def _replace_selenocysteine(input_path, output_path, ligand_coords):
+def update_element_positions(input_path):
 
-    """Replace selenocysteine (SEC) → cysteine (CYS) at the PDB text level.
+	line_list = []
 
-    PDBFixer does not flag SEC as nonstandard, so this handles it explicitly.
-    The selenium (SE) atom is renamed to the cysteine sulfur-gamma (SG) and
-    the element column is updated from SE → S.
+	with open(input_path, 'r') as f:
+		for line in f:
+			line = line.strip()
+			if line.startswith(("ATOM", "HETATM")):
+				element = line[76:78]
+				shifted_element = line[75:77]
+				if len(element.strip()) == 1 and len(shifted_element.strip()) == 2:
+					line = (line[:75] + ' ' + shifted_element.ljust(2) + line[78:])
 
-    Applies the same proximity rule: if *any* SEC atom is within
-    *distance_cutoff* Å of a ligand atom the file is left untouched and
-    ``False`` is returned.
-    """
+			line_list.append(line)
 
-    with open(input_path, 'r') as f:
-        lines = f.readlines()
+	with open(input_path, 'w') as f:
+		f.write('\n'.join(line_list))
 
-    # Identify ATOM/HETATM lines belonging to SEC residues
-    sec_line_indices = [
-        i for i, line in enumerate(lines)
-        if line.startswith(("ATOM", "HETATM")) and line[17:20].strip() == "SEC"
-    ]
+def add_seqres_with_caps(input_pdb: str, output_pdb: str):
+	"""
+	Add SEQRES records with ACE/NME caps to a PDB file.
+	PDBFixer will then detect these as 'missing' and build them.
+	"""
 
-    if sec_line_indices:
-        # Distance check
-        if ligand_coords.size > 0:
-            for idx in sec_line_indices:
-                line = lines[idx]
-                coord = np.array([
-                    float(line[30:38]),
-                    float(line[38:46]),
-                    float(line[46:54]),
-                ])
-                dists = np.linalg.norm(ligand_coords - coord, axis=1)
-                if dists.min() < 6.0:
-                    return
+	# First, read the structure to get chain sequences
+	pdb = PDBFile(input_pdb)
 
-    # Safe to replace: SEC → CYS, SE atom → SG, element SE → S
-    for idx in sec_line_indices:
-        line = lines[idx]
-        # Residue name (cols 17-20)
-        line = line[:17] + "CYS" + line[20:]
-        # Atom name: replace SE with SG (cols 12-16)
-        atom_name = line[12:16].strip()
-        if atom_name == "SE":
-            line = line[:12] + " SG " + line[16:]
-            # Element column (cols 76-78)
-            if len(line.rstrip("\n")) >= 78:
-                line = line[:76] + " S" + line[78:]
-            elif len(line.rstrip("\n")) >= 77:
-                line = line[:76] + " S\n"
-        lines[idx] = line
+	# Build sequence for each chain
+	chain_sequences = {}
+	for chain in pdb.topology.chains():
+		residues = list(chain.residues())
+		protein_residues = [r for r in residues if r.name in STANDARD_AA]
 
-    with open(output_path, "w") as fh:
-        fh.writelines(lines)
-    return
+		if len(protein_residues) > 4:
+			# Add ACE at start, NME at end
+			seq = ['ACE'] + [r.name for r in protein_residues] + ['NME']
+			chain_sequences[chain.id] = seq
 
+	# Now write modified PDB with SEQRES records
+	with open(input_pdb, 'r') as f_in, open(output_pdb, 'w') as f_out:
+		# First write SEQRES records for each chain
+		for chain_id, seq in chain_sequences.items():
+			# SEQRES records: max 13 residues per line
+			for i in range(0, len(seq), 13):
+				chunk = seq[i:i+13]
+				line_num = (i // 13) + 1
+				seqres_line = f"SEQRES {line_num:>3} {chain_id} {len(seq):>4}  "
+				seqres_line += " ".join(f"{res:>3}" for res in chunk)
+				f_out.write(seqres_line + '\n')
+
+		# Then copy the rest of the file (skip existing SEQRES lines)
+		for line in f_in:
+			if not line.startswith('SEQRES'):
+				f_out.write(line)
+
+	return chain_sequences
+
+def is_nonstandard_residue(residue, chain_residues):
+	"""
+	Nonstandard residues should have all required backbone elements and should be flanked by standard residues
+	"""
+
+	elements = {atom.element.symbol for atom in residue.atoms()}
+	if {'C', 'N', 'O'}.issubset(elements):
+		# Must be flanked by standard residues
+		res_list = chain_residues[residue.chain.index]
+		if len(res_list) > 10:
+			local_idx = next(i for i, r in enumerate(res_list) if r == residue)
+			if local_idx != 0 and local_idx != len(res_list) - 1:
+				prev_res = res_list[local_idx - 1]
+				next_res = res_list[local_idx + 1]
+				if prev_res.name in FIXED_RESIDUES or next_res.name in FIXED_RESIDUES:
+					return True
+
+	return False
 
 def fix_nonstandard_residues(input_path, output_path, ligand_coords):
-    """Use PDBFixer to find nonstandard residues in *receptor_pdb*.
+	"""Use PDBFixer to find nonstandard residues in *receptor_pdb*.
 
-    Selenocysteine (SEC) is handled first as a special case because PDBFixer
-    does not recognise it as nonstandard.
+	If **all** nonstandard residues are farther than *distance_cutoff* Å from
+	every atom in *ligand_coords*, they are silently replaced by their standard
+	counterparts and the PDB is overwritten in-place.
 
-    If **all** nonstandard residues are farther than *distance_cutoff* Å from
-    every atom in *ligand_coords*, they are silently replaced by their standard
-    counterparts and the PDB is overwritten in-place.
+	If any nonstandard residue has at least one atom within *distance_cutoff* Å
+	of a ligand atom, the file is left untouched and the function returns
+	``False`` so the caller can abort.
 
-    If any nonstandard residue has at least one atom within *distance_cutoff* Å
-    of a ligand atom, the file is left untouched and the function returns
-    ``False`` so the caller can abort.
+	"""
 
-    Returns
-    -------
-    bool
-        ``True`` if residues were replaced (or none were found);
-        ``False`` if a nonstandard residue was too close to a ligand.
-    """
-    # --- SEC → CYS (not detected by PDBFixer) ---
-    tmp_path = input_path.replace('.pdb', '_sec.pdb')
-    _replace_selenocysteine(input_path, tmp_path, ligand_coords)
-    if not os.path.isfile(tmp_path):
-        return
+	tmp_path = input_path.replace('.pdb', '_seqres.pdb')
+	chain_seqs = add_seqres_with_caps(input_path, tmp_path)
 
-    fixer = PDBFixer(filename=tmp_path)
-    fixer.findNonstandardResidues()
+	fixer = PDBFixer(filename=tmp_path)
+	fixer.findNonstandardResidues()
 
-    if fixer.nonstandardResidues:
+	# Build a list of residues per chain for neighbor lookup
+	chain_residues = {}
+	for chain in fixer.topology.chains():
+		chain_residues[chain.index] = list(chain.residues())
 
-        # Check each nonstandard residue for proximity to any ligand atom
-        for residue, _replacement in fixer.nonstandardResidues:
-            for atom in residue.atoms():
-                atom_idx = atom.index
-                # PDBFixer positions are openmm Quantity objects in nanometres
-                pos = fixer.positions[atom_idx]
-                atom_coord = np.array([
-                    pos.x * 10.0,   # nm → Å
-                    pos.y * 10.0,
-                    pos.z * 10.0,
-                ])
-                dists = np.linalg.norm(ligand_coords - atom_coord, axis=1)
-                if dists.min() < 6.0:
-                    return
+	# Apply custom substitutions and default-to-ALA fallback
+	already_flagged = {r for r, _ in fixer.nonstandardResidues}
+	for residue in fixer.topology.residues():
+		elements = {atom.element for atom in residue.atoms()}
+		if None in elements:
+			return
 
-        # All nonstandard residues are far from ligands – safe to replace
-        fixer.replaceNonstandardResidues()
+		if residue.name not in FIXED_RESIDUES and residue not in already_flagged:
+			if is_nonstandard_residue(residue, chain_residues):
+				replacement = CUSTOM_SUBSTITUTIONS.get(residue.name, 'ALA')
+				fixer.nonstandardResidues.append((residue, replacement))
 
-    with open(output_path, "w") as fh:
-        PDBFile.writeFile(fixer.topology, fixer.positions, fh)
-    return
+	# Check each nonstandard residue for proximity to any ligand atom
+	if fixer.nonstandardResidues:
+		for residue, _replacement in fixer.nonstandardResidues:
+			for atom in residue.atoms():
+				atom_idx = atom.index
+				# PDBFixer positions are openmm Quantity objects in nanometres
+				pos = fixer.positions[atom_idx]
+				atom_coord = np.array([pos.x * 10.0, pos.y * 10.0, pos.z * 10.0])
+				dists = np.linalg.norm(ligand_coords - atom_coord, axis=1)
+				if dists.min() < SHELL_RADIUS:
+					print(f'{residue.name} in shell')
+					return
+
+        	# All nonstandard residues are far from ligands – safe to replace
+		fixer.replaceNonstandardResidues()
+
+	fixer.findMissingResidues()
+	fixer.findMissingAtoms()
+
+	# Check if any residue with missing atoms is near the ligand
+	for residue in list(fixer.missingAtoms.keys()):
+		for atom in residue.atoms():
+			pos = fixer.positions[atom.index]
+			atom_coord = np.array([pos.x * 10.0, pos.y * 10.0, pos.z * 10.0])
+			dists = np.linalg.norm(ligand_coords - atom_coord, axis=1)
+			if dists.min() < SHELL_RADIUS:
+				print(f'Missing {residue.name} in shell')
+				return
+
+	fixer.addMissingAtoms()
+
+	with open(output_path, "w") as fh:
+		PDBFile.writeFile(fixer.topology, fixer.positions, fh)
+	return
 
 @dataclass
 class OccupancyInfo:
@@ -380,6 +422,104 @@ class OverlapResolver:
 
         else:
             return False
+
+    def split_disconnected_chains(self, structure, gap_threshold: float = 4.0) -> None:
+        """Split chains where consecutive residues are farther than *gap_threshold* Å apart.
+
+        For every protein chain (i.e. not the ligand chain 'Z'), iterate over
+        consecutive residue pairs and compute the minimum heavy-atom distance.
+        If that distance exceeds *gap_threshold*, the chain is split into
+        separate chains at the gap.  New chain IDs are drawn from the pool of
+        unused single-character identifiers.
+
+        Parameters
+        ----------
+        structure : Bio.PDB.Structure
+            The structure to modify **in place**.
+        gap_threshold : float, optional
+            Maximum allowed minimum distance (Å) between consecutive residues
+            before a split is introduced.  Default 4.0.
+        """
+
+        model = structure[0]
+
+        # Build pool of available chain IDs (exclude those already in use)
+        all_chain_chars = list(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYabcdefghijklmnopqrstuvwxyz0123456789"
+        )
+        used_ids = {chain.id for chain in model}
+        available_ids = [c for c in all_chain_chars if c not in used_ids]
+        id_cursor = 0
+
+        # Collect chain IDs up front so we can mutate the model while iterating
+        chain_ids = [chain.id for chain in model]
+
+        for chain_id in chain_ids:
+            if chain_id == 'Z':
+                continue  # never split the ligand chain
+
+            chain = model[chain_id]
+            residues = list(chain.get_residues())
+
+            if len(residues) < 2:
+                continue
+
+            # Find split points ------------------------------------------------
+            split_indices: List[int] = []  # index *after* which we cut
+
+            for i in range(len(residues) - 1):
+                coords_i = np.array(
+                    [a.get_vector().get_array() for a in residues[i].get_atoms()]
+                )
+                coords_j = np.array(
+                    [a.get_vector().get_array() for a in residues[i + 1].get_atoms()]
+                )
+
+                if coords_i.size == 0 or coords_j.size == 0:
+                    continue
+
+                # Pairwise distance matrix between all atoms of the two residues
+                diff = coords_i[:, None, :] - coords_j[None, :, :]
+                dists = np.sqrt((diff ** 2).sum(axis=-1))
+                min_dist = dists.min()
+
+                if min_dist > gap_threshold:
+                    split_indices.append(i)
+
+            if not split_indices:
+                continue  # chain is fully connected
+
+            # Build segment boundaries -----------------------------------------
+            # segments[k] = (start_residue_index, end_residue_index) inclusive
+            boundaries = [-1] + split_indices + [len(residues) - 1]
+            segments = [
+                (boundaries[k] + 1, boundaries[k + 1])
+                for k in range(len(boundaries) - 1)
+            ]
+
+            # Detach original chain from the model
+            model.detach_child(chain_id)
+
+            for seg_idx, (start, end) in enumerate(segments):
+                # First segment keeps the original chain ID
+                if seg_idx == 0:
+                    new_id = chain_id
+                else:
+                    if id_cursor >= len(available_ids):
+                        # Extremely unlikely; fall back to original chain
+                        break
+                    new_id = available_ids[id_cursor]
+                    id_cursor += 1
+
+                new_chain = Chain(new_id)
+
+                for res_i in range(start, end + 1):
+                    res = residues[res_i]
+                    # Detach from old parent so it can be re-parented
+                    res.detach_parent()
+                    new_chain.add(res)
+
+                model.add(new_chain)
 
     def detect_contacts(self, structure) -> Tuple[Dict[str, ResidueContact], List[str], List[str], List[Tuple[str, int]]]:
         """
@@ -669,7 +809,7 @@ class OverlapResolver:
         cofactor_bool = False
 
         for residue in chain:
-            if residue.get_resname() in METALLOCOFACTOR_LIST:
+            if residue.get_resname() in METALLOCOFACTORS:
                 cofactor_bool = True
                 break
 
@@ -758,11 +898,19 @@ class ComplexFixer:
             parser = MMCIFParser(QUIET = True, structure_builder = NonUniqueStructureBuilder())
             structure = parser.get_structure('system', tmp_path)
 
+            # Step 3b: Strip hydrogens
+            atoms_to_remove = [atom for atom in structure.get_atoms() if atom.element == 'H']
+            for atom in atoms_to_remove:
+                atom.get_parent().detach_child(atom.id)
+
             # Step 4: Chain mapping from CIF to PDB
             chain_mapping = self.overlap_resolver.create_chain_mapping(structure, ligand_id)
             lig_bool = self.overlap_resolver.rename_chains(structure, chain_mapping)
             if not lig_bool:
                 return
+
+            # Step 4b: Split chains that have disconnected segments (gap > 4 Å)
+            self.overlap_resolver.split_disconnected_chains(structure, gap_threshold=4.0)
 
             # Step 5: Detect contacts
             contact_info, bonds_to_add, overlaps_to_resolve, intra_chain_contacts = self.overlap_resolver.detect_contacts(structure)
@@ -783,7 +931,10 @@ class ComplexFixer:
                 io.set_structure(structure)
                 io.save(f'{tmp_dir}/{basename}.pdb')
 
+                update_element_positions(f'{tmp_dir}/{basename}.pdb')
+
                 fix_nonstandard_residues(f'{tmp_dir}/{basename}.pdb', f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb', ligand_coords)
+                print(f'Output file written to {basename}.pdb')
 
     def wrapper(self, num_cores = 1):
         """
