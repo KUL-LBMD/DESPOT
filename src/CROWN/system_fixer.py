@@ -1,6 +1,6 @@
 """
 split_system.py
-~~~~~~~~~~~~~
+~~~~~~~~~~~~
 Read individual SDF files from a directory, merge them, match against a
 reference PDB, restore missing bonds by proximity, split into connected
 components, classify each by PDB residue name, and write:
@@ -18,6 +18,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
+import shutil
 import subprocess
 
 from src.config import DATA_DIR, SOURCE_DB_PATH
@@ -456,6 +457,62 @@ def classify_molecule(
 
 
 # ---------------------------------------------------------------------------
+# Source-SDF exact-match helper
+# ---------------------------------------------------------------------------
+
+def find_matching_source_sdf(
+    component: Molecule,
+    sdf_dir: Path,
+    tol: float,
+) -> Path | None:
+    """Return the path of a source SDF whose heavy-atom coordinates are an
+    exact match for *component*, or ``None`` if no match is found.
+
+    "Exact match" means:
+      1. The source SDF has the same number of heavy atoms as *component*.
+      2. Every atom in *component* has a counterpart in the source SDF within
+         *tol* Å, and vice-versa (bijective pairing via nearest-neighbour).
+
+    When a match is found, copying the source file is preferred over
+    re-serialising through ``write_sdf`` because it preserves the original
+    bond orders, stereo flags, and properties exactly.
+    """
+    comp_coords = component.coord_matrix  # (N, 3)
+    n = len(comp_coords)
+    if n == 0:
+        return None
+
+    for sdf_path in sorted(sdf_dir.glob("*.sdf")):
+        try:
+            src = read_sdf_v2000(sdf_path)
+        except Exception:
+            continue
+
+        # Only consider heavy atoms from the source for a fair comparison
+        src_coords = np.array([
+            [a.x, a.y, a.z] for a in src.atoms if a.is_heavy
+        ])
+        if len(src_coords) != n:
+            continue
+
+        # Check every component atom has a source atom within tol (forward)
+        dists_fwd = np.linalg.norm(
+            src_coords[:, None, :] - comp_coords[None, :, :], axis=2
+        )  # (src_n, n)
+        if not np.all(dists_fwd.min(axis=0) < tol):
+            continue
+
+        # Check every source atom has a component atom within tol (backward)
+        if not np.all(dists_fwd.min(axis=1) < tol):
+            continue
+
+        log.info("  Exact coord match found: %s → will copy source SDF", sdf_path.name)
+        return sdf_path
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Pipeline
 # ---------------------------------------------------------------------------
 
@@ -517,12 +574,23 @@ def split_system(
 
         label = classify_molecule(comp_no_metals, pdb_atoms, cfg.coord_match_tol,
                                   ligand_resname=ligand_resname)
+
+        # Prefer copying the original source SDF when coordinates match exactly,
+        # so that original bond orders, stereo, and properties are preserved.
+        match_src = find_matching_source_sdf(comp_no_metals, sdf_dir, cfg.coord_match_tol)
+
         if label == "lig":
             lig_idx += 1
-            write_sdf([comp_no_metals], out_dir / f"lig_fixed_{lig_idx}.sdf")
+            out_path = out_dir / f"lig_fixed_{lig_idx}.sdf"
         else:
             cof_idx += 1
-            write_sdf([comp_no_metals], out_dir / f"cof_fixed_{cof_idx}.sdf")
+            out_path = out_dir / f"cof_fixed_{cof_idx}.sdf"
+
+        if match_src is not None:
+            shutil.copy(match_src, out_path)
+            log.info("  Copied %s -> %s (exact coord match)", match_src.name, out_path.name)
+        else:
+            write_sdf([comp_no_metals], out_path)
 
     log.info("Wrote %d ligand(s) and %d cofactor(s)", lig_idx, cof_idx)
 

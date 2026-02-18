@@ -16,6 +16,7 @@ from openff.toolkit import Molecule
 from openff.units import unit as openff_unit
 from openmm import CustomExternalForce, LangevinMiddleIntegrator, unit, Platform
 import logging
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -45,6 +46,24 @@ METALLOCOFACTORS_AMBER = {'HEM', 'SF4', 'MGD'}
 METALLOCOFACTORS_CHARMM = {'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43'}
 
 # ============================================================================
+
+def resolve_duplicate_templates(ff):
+    """
+    Remove duplicate residue templates from an OpenMM ForceField object.
+    """
+
+    name_to_keys = defaultdict(list)
+    for key, template in ff._templates.items():
+        name_to_keys[template.name].append(key)
+
+    duplicates = {n: k for n, k in name_to_keys.items() if len(k) > 1}
+
+    for res_name, keys in duplicates.items():
+        keep = keys[-1]
+        for k in [k for k in keys if k != keep]:
+            del ff._templates[k]
+
+    return ff
 
 def calc_rmsd(pos_ref, pos_target, atom_indices):
 	"""
@@ -95,38 +114,37 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	if mol is None:
 		# Try out alternate ways of loading molecule
 		with tempfile.TemporaryDirectory() as tmp_dir:
-			subprocess.run(['obabel', '-isdf', sdf_path, '-osdf', '-O', f'{tmp_dir}/temp.sdf'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-			mol = Chem.SDMolSupplier(f'{tmp_dir}/temp.sdf', removeHs=True)[0]
 			if mol is None:
-				subprocess.run(['obabel', '-isdf', sdf_path, '-omol2', '-O', f'{tmp_dir}/temp.mol2'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-				mol = Chem.MolFromMol2File(f'{tmp_dir}/temp.mol2', sanitize = True, removeHs = False)
+				subprocess.run(['obabel', '-isdf', sdf_path, '-opdb', '-O', f'{tmp_dir}/temp.pdb'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+				mol = Chem.MolFromPDBFile(f'{tmp_dir}/temp.pdb', removeHs=False, sanitize=False)
 				if mol is None:
-					subprocess.run(['obabel', '-isdf', sdf_path, '-opdb', '-O', f'{tmp_dir}/temp.pdb'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-					mol = Chem.MolFromPDBFile(f'{tmp_dir}/temp.pdb', removeHs=False, sanitize=False)
-					if mol is None:
-						logger.error(f"Failed to load ligand from {sdf_path} using all fallback methods.")
-						return
+					return
 
-					# FIX OXYGEN FORMAL CHARGES, used to be problem in NAD+ that was deprotonated.
-					for atom in mol.GetAtoms():
-						if atom.GetAtomicNum() != 8:         # skip non-O
-							continue
-						# count DOUBLE bonds; Double-bonded O should have formal charge = 0
-						n_double = sum(1 for b in atom.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE)
-						if n_double:
-							atom.SetFormalCharge(0)
-							continue
+				# FIX OXYGEN FORMAL CHARGES, used to be problem in NAD+ that was deprotonated.
+				for atom in mol.GetAtoms():
+					if atom.GetAtomicNum() != 8:         # skip non-O
+						continue
+					# count DOUBLE bonds; Double-bonded O should have formal charge = 0
+					n_double = sum(1 for b in atom.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE)
+					if n_double:
+						atom.SetFormalCharge(0)
+						continue
 
-						# Single-bonded O attached to C should have formal charge = -1
-						num_neighbors = atom.GetDegree()
-						if num_neighbors == 1:
-							neighbor = atom.GetNeighbors()[0]
-							bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
-							if (neighbor.GetAtomicNum() in (6, 15, 16) and bond.GetBondType() == Chem.BondType.SINGLE and atom.GetFormalCharge() == 0):
-								atom.SetFormalCharge(-1)
+					# Single-bonded O attached to C should have formal charge = -1
+					num_neighbors = atom.GetDegree()
+					if num_neighbors == 1:
+						neighbor = atom.GetNeighbors()[0]
+						bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
+						if (neighbor.GetAtomicNum() in (6, 15, 16) and bond.GetBondType() == Chem.BondType.SINGLE and atom.GetFormalCharge() == 0):
+							atom.SetFormalCharge(-1)
 
-					formal_charge = Chem.GetFormalCharge(mol)
-					rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
+				formal_charge = Chem.GetFormalCharge(mol)
+
+				for charge in [formal_charge] + [formal_charge + d for d in (1, -1, 2, -2, 3, -3)]:
+					try:
+						rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
+					except ValueError:
+						continue
 
 	# Strip existing Hs, protonate at target pH
 	mol_noh = Chem.RemoveAllHs(mol)
@@ -144,6 +162,12 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	protonated_h = Chem.AddHs(protonated, addCoords=True)
 	formal_charge = Chem.GetFormalCharge(protonated_h)
 	logger.info(f'Formal charge: {formal_charge}')
+
+	# Compute MMFF partial charges
+	mmff = AllChem.MMFFGetMoleculeProperties(protonated_h)
+	charges = [mmff.GetMMFFPartialCharge(i) for i in range(protonated_h.GetNumAtoms())]
+	charges_str = " ".join(f"{charge:.6f}" for charge in charges)
+	protonated_h.SetProp("atom.dprop.PartialCharge", charges_str)
 
 	writer = Chem.SDWriter(out_sdf)
 	writer.write(protonated_h)
@@ -190,7 +214,7 @@ def add_bonds(topology, positions, resname_set):
                     # Fe-N bonds are ~2.0 Å
                     metal_set = {'Fe', 'Mn', 'Mg', 'Ni', 'Zn', 'Cu'}
                     if ei in metal_set or ej in metal_set:
-                        if dist < 0.22:  # 2.2 Å in nm
+                        if dist < 0.25:  # 2.5 Å in nm
                             topology.addBond(atoms[i], atoms[j])
                     # C-C, C-N, C-O bonds are ~1.2-1.55 Å
                     else:
@@ -249,7 +273,7 @@ def prepare_amber_regular(pdb_path):
 	logging.getLogger("openff").setLevel(logging.ERROR)
 	modeller = Modeller(fixer.topology, fixer.positions)
 
-	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/opc3.xml']
+	forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/opc3.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/HEM.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/MGD.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/SF4.xml']
 
 	return modeller, forcefield_list
 
@@ -320,6 +344,12 @@ def refine_system(input_dir):
 					n_atoms = ligand_topology.getNumAtoms()
 					modeller.add(ligand_topology, ligand_positions)
 
+					if ligand_file == 'lig_fixed_1_h.sdf':
+						added_atom_indices = set(range(offset, offset + n_atoms))
+						for residue in modeller.topology.residues():
+							if any(atom.index in added_atom_indices for atom in residue.atoms()):
+								residue.name = 'LIG'
+
 					ligand_entries.append((basename, ligand_mol, list(range(offset, offset + n_atoms))))
 
 			# Merged set of all ligand indices (used for KDTree and restraints)
@@ -341,6 +371,9 @@ def refine_system(input_dir):
 				small_molecule_forcefield='openff-2.2.0',
 				molecules=ligand_molecules,
 			)
+
+			# Remove duplicate entries: TL1 / Tl, FE2 / FE
+			system_generator.forcefield = resolve_duplicate_templates(system_generator.forcefield)
 
 			system = system_generator.create_system(modeller.topology)
 
@@ -415,6 +448,13 @@ def refine_system(input_dir):
 			platform = Platform.getPlatformByName('CPU')
 			properties = {'Threads': '1'}
 
+			# Save original coordinates before energy minimization
+			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_protonated.pdb'
+			mol2_path = pdb_path.replace('.pdb', '.mol2')
+			with open(pdb_path, 'w') as f:
+				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
+			subprocess.run(['obabel', '-ipdb', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 			simulation = Simulation(modeller.topology, system, integrator, platform, properties)
 			simulation.context.setPositions(modeller.positions)
 
@@ -442,7 +482,7 @@ def refine_system(input_dir):
 			mol2_path = pdb_path.replace('.pdb', '.mol2')
 			with open(pdb_path, 'w') as f:
 				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
-			subprocess.run(['obabel', '-isdf', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+			subprocess.run(['obabel', '-ipdb', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 			# Save each ligand as a separate mol2 with minimized coordinates
 			for basename, ligand_mol, atom_indices in ligand_entries:

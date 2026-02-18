@@ -70,7 +70,7 @@ def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 		residues = list(chain.residues())
 		protein_residues = [r for r in residues if r.name in STANDARD_AA]
 
-		if len(protein_residues) > 4:
+		if len(protein_residues) > 2:
 			# Add ACE at start, NME at end
 			seq = ['ACE'] + [r.name for r in protein_residues] + ['NME']
 			chain_sequences[chain.id] = seq
@@ -109,6 +109,16 @@ def is_nonstandard_residue(residue, chain_residues):
 				prev_res = res_list[local_idx - 1]
 				next_res = res_list[local_idx + 1]
 				if prev_res.name in FIXED_RESIDUES or next_res.name in FIXED_RESIDUES:
+					return True
+
+			elif local_idx == 0:
+				next_res = res_list[local_idx + 1]
+				if next_res.name in FIXED_RESIDUES:
+					return True
+
+			elif local_idx == len(res_list) - 1:
+				prev_res = res_list[local_idx - 1]
+				if prev_res.name in FIXED_RESIDUES:
 					return True
 
 	return False
