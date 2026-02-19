@@ -14,6 +14,7 @@ from openmmforcefields.generators import SystemGenerator
 from openmm.app import PDBFile, Modeller, ForceField, Simulation
 from openff.toolkit import Molecule
 from openff.units import unit as openff_unit
+from openff.nagl_models import list_available_nagl_models
 from openmm import CustomExternalForce, LangevinMiddleIntegrator, unit, Platform
 import logging
 from collections import defaultdict
@@ -24,7 +25,7 @@ logger.setLevel(logging.INFO)
 # ============================================================================
 # DEFAULT PARAMETERS
 # ============================================================================
-MOBILE_RADIUS = 0.8  # Distance in nm (8 Å = 0.8 nm)
+MOBILE_RADIUS = 0.6  # Distance in nm (6 Å = 0.6 nm)
 FIX_STRENGTH = 1000000.0  # kJ/mol/nm² - very high to effectively freeze atoms
 TETHER_STRENGTH = 10 # kcal/(mol*A^2). Default parameter in MOE
 TETHER_FLATBOTTOM = 0.25 # Within 0.25 A radius, atoms feel no tethering force
@@ -44,26 +45,82 @@ STANDARD_AMINO_ACIDS = {
 WATER_NAMES = {'HOH', 'WAT', 'TIP3', 'SOL', 'OPC'}
 METALLOCOFACTORS_AMBER = {'HEM', 'SF4', 'MGD'}
 METALLOCOFACTORS_CHARMM = {'B12', 'COB', 'CLA', 'BCL', 'CHL', 'F43'}
+TEMPLATES_TO_REMOVE = {'AG1', 'Ce', 'Cr', 'CU1', 'EU3', 'FE2', 'TL1'}
 
 # ============================================================================
+def clean_ff(ff):
+	"""
+	Remove non-identical matching templates.
+	"""
 
-def resolve_duplicate_templates(ff):
+	for key in TEMPLATES_TO_REMOVE:
+		del ff._templates[key]
+
+	# Remove from signature matching as well
+	for sig, templates in list(ff._templateSignatures.items()):
+		ff._templateSignatures[sig] = [t for t in templates if not t.name in TEMPLATES_TO_REMOVE]
+
+	return ff
+
+def rename_single_atom_residues(pdb_path):
+    pdb = PDBFile(pdb_path)
+    modified = False
+    for residue in pdb.topology.residues():
+        if residue.name in ('LIG', 'UNK', 'UNL'):
+            atoms = list(residue.atoms())
+            if len(atoms) == 1:
+                residue.name = atoms[0].name.strip().upper()
+                modified = True
+    if modified:
+        with open(pdb_path, 'w') as f:
+            PDBFile.writeFile(pdb.topology, pdb.positions, f)
+
+def assign_charges_with_fallback(molecule: Molecule) -> Molecule:
     """
-    Remove duplicate residue templates from an OpenMM ForceField object.
+    Assign AM1-BCC partial charges to an OpenFF Molecule, with NAGL as fallback.
+
+    AM1-BCC via AmberTools (sqm) can fail for large or highly-charged molecules
+    (e.g. NADP+, CoA). NAGL is a GNN-based charge model that is much more robust
+    and is already available in this environment.
+
+    Parameters
+    ----------
+    molecule : openff.toolkit.Molecule
+        The molecule to charge. Modified in-place and returned.
+
+    Returns
+    -------
+    openff.toolkit.Molecule
+        The same molecule with partial_charges populated.
     """
+    # Skip if charges already assigned (e.g. from SDF PartialCharge property)
+    if molecule.partial_charges is not None:
+        logger.info(f"Molecule '{molecule.name}' already has partial charges, skipping.")
+        return molecule
 
-    name_to_keys = defaultdict(list)
-    for key, template in ff._templates.items():
-        name_to_keys[template.name].append(key)
+    # --- Attempt 1: standard am1bcc via AmberTools (sqm) ---
+    try:
+        molecule.assign_partial_charges('am1bcc')
+        logger.info(f"Charges assigned via am1bcc for '{molecule.name}'.")
+        return molecule
+    except Exception as e:
+        logger.warning(
+            f"am1bcc charge assignment failed for '{molecule.name}' "
+            f"(net charge {molecule.total_charge}): {e}\n"
+            f"Falling back to NAGL."
+        )
 
-    duplicates = {n: k for n, k in name_to_keys.items() if len(k) > 1}
-
-    for res_name, keys in duplicates.items():
-        keep = keys[-1]
-        for k in [k for k in keys if k != keep]:
-            del ff._templates[k]
-
-    return ff
+    # --- Attempt 2: NAGL GNN charge model ---
+    try:
+        # Prefer the most recent am1bcc-equivalent model
+        model_path = str(next(m for m in list_available_nagl_models() if m.name == 'openff-gnn-am1bcc-1.0.0.pt'))
+        logger.info(f"Using NAGL model: {model_path}")
+        molecule.assign_partial_charges('nagl', nagl_model=model_path)
+        logger.info(f"Charges assigned via NAGL for '{molecule.name}'.")
+        return molecule
+    except Exception as e:
+        logger.error(f"NAGL charge assignment also failed for '{molecule.name}': {e}")
+        raise
 
 def calc_rmsd(pos_ref, pos_target, atom_indices):
 	"""
@@ -146,6 +203,20 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 					except ValueError:
 						continue
 
+	# Check if molecule is fully connected
+	frags = rdmolops.GetMolFrags(mol)
+	if len(frags) > 1:
+		try:
+			rdDetermineBonds.DetermineBonds(mol)
+			# Check if it's now connected
+			new_frags = rdmolops.GetMolFrags(mol)
+			if len(new_frags) > 1:
+				logger.info(f"  Warning: still {len(new_frags)} fragments after bond determination.")
+			else:
+				logger.info(f"  Successfully connected into a single molecule.")
+		except Exception as e:
+			logger.info(f"  DetermineBonds failed: {e}")
+
 	# Strip existing Hs, protonate at target pH
 	mol_noh = Chem.RemoveAllHs(mol)
 	protonated = dl.run_with_mol_list(
@@ -162,12 +233,6 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	protonated_h = Chem.AddHs(protonated, addCoords=True)
 	formal_charge = Chem.GetFormalCharge(protonated_h)
 	logger.info(f'Formal charge: {formal_charge}')
-
-	# Compute MMFF partial charges
-	mmff = AllChem.MMFFGetMoleculeProperties(protonated_h)
-	charges = [mmff.GetMMFFPartialCharge(i) for i in range(protonated_h.GetNumAtoms())]
-	charges_str = " ".join(f"{charge:.6f}" for charge in charges)
-	protonated_h.SetProp("atom.dprop.PartialCharge", charges_str)
 
 	writer = Chem.SDWriter(out_sdf)
 	writer.write(protonated_h)
@@ -311,6 +376,7 @@ def refine_system(input_dir):
 
 			# First check for weird cofactors
 			pdb_path = f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb'
+			rename_single_atom_residues(pdb_path)  # fix single-atom LIG/UNK/UNL residues
 			amber_residues, charmm_residues = find_cofactors(pdb_path)
 			if amber_residues and charmm_residues:
 				return
@@ -333,6 +399,7 @@ def refine_system(input_dir):
 				if ligand_file.endswith('_h.sdf'):
 					basename = ligand_file.replace('_h.sdf', '')
 					ligand_mol = Molecule.from_file(f'{tmp_dir}/{ligand_file}')
+					ligand_mol = assign_charges_with_fallback(ligand_mol)
 					ligand_molecules.append(ligand_mol)
 
 					# Convert OpenFF positions to OpenMM unit system
@@ -373,7 +440,7 @@ def refine_system(input_dir):
 			)
 
 			# Remove duplicate entries: TL1 / Tl, FE2 / FE
-			system_generator.forcefield = resolve_duplicate_templates(system_generator.forcefield)
+			system_generator.forcefield = clean_ff(system_generator.forcefield)
 
 			system = system_generator.create_system(modeller.topology)
 
@@ -426,10 +493,12 @@ def refine_system(input_dir):
 			for atom in modeller.topology.atoms():
 				pos = positions[atom.index].value_in_unit(unit.nanometers)
 
-				if atom.index not in mobile_atoms:
-					nonmobile_restraint.addParticle(atom.index, pos)
-				else:
-					mobile_restraint.addParticle(atom.index, pos)
+				if atom.element.symbol != 'H':
+
+					if atom.index not in mobile_atoms:
+						nonmobile_restraint.addParticle(atom.index, pos)
+					else:
+						mobile_restraint.addParticle(atom.index, pos)
 
 			system.addForce(nonmobile_restraint)
 			system.addForce(mobile_restraint)
@@ -449,10 +518,11 @@ def refine_system(input_dir):
 			properties = {'Threads': '1'}
 
 			# Save original coordinates before energy minimization
+			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
 			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_protonated.pdb'
 			mol2_path = pdb_path.replace('.pdb', '.mol2')
 			with open(pdb_path, 'w') as f:
-				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
+				PDBFile.writeFile(modeller.topology, modeller.positions, f)
 			subprocess.run(['obabel', '-ipdb', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 			simulation = Simulation(modeller.topology, system, integrator, platform, properties)
@@ -472,9 +542,6 @@ def refine_system(input_dir):
 			pos_after = state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)
 			rmsd = calc_rmsd(pos_before, pos_after, sorted(mobile_atoms))
 			logger.info(f'{input_dir} - RMSD {rmsd}')
-
-			# Save minimized structure as pdb and .mol2 files
-			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
 
 			# Save minimized structure as PDB (protein/water only, no ligands)
 			pdb_modeller = Modeller(modeller.topology, minimized_positions)

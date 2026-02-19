@@ -170,7 +170,7 @@ def fix_nonstandard_residues(input_path, output_path, ligand_coords):
 				dists = np.linalg.norm(ligand_coords - atom_coord, axis=1)
 				if dists.min() < SHELL_RADIUS:
 					print(f'{residue.name} in shell')
-					return
+					return 'modified_in_shell'
 
         	# All nonstandard residues are far from ligands – safe to replace
 		fixer.replaceNonstandardResidues()
@@ -186,13 +186,13 @@ def fix_nonstandard_residues(input_path, output_path, ligand_coords):
 			dists = np.linalg.norm(ligand_coords - atom_coord, axis=1)
 			if dists.min() < SHELL_RADIUS:
 				print(f'Missing {residue.name} in shell')
-				return
+				return 'missing_atoms_in_shell'
 
 	fixer.addMissingAtoms()
 
 	with open(output_path, "w") as fh:
 		PDBFile.writeFile(fixer.topology, fixer.positions, fh)
-	return
+	return 'ok'
 
 @dataclass
 class OccupancyInfo:
@@ -888,6 +888,13 @@ class ComplexFixer:
 
     def preprocess_file(self, system_id, ligand_id):
 
+        flags = {
+            'has_missing_bonds': False,
+            'has_steric_overlaps': False,
+            'has_missing_atoms_in_shell': False,
+            'has_modified_residues_in_shell': False,
+        }
+
         with tempfile.TemporaryDirectory() as tmp_dir:
 
             # Step 1: Analyze occupancy
@@ -904,7 +911,7 @@ class ComplexFixer:
             # Step 3: Load structure
             cif_bool = is_valid_cif(tmp_path)
             if not cif_bool:
-                return
+                return flags
             parser = MMCIFParser(QUIET = True, structure_builder = NonUniqueStructureBuilder())
             structure = parser.get_structure('system', tmp_path)
 
@@ -917,13 +924,18 @@ class ComplexFixer:
             chain_mapping = self.overlap_resolver.create_chain_mapping(structure, ligand_id)
             lig_bool = self.overlap_resolver.rename_chains(structure, chain_mapping)
             if not lig_bool:
-                return
+                return flags
 
             # Step 4b: Split chains that have disconnected segments (gap > 4 Å)
             self.overlap_resolver.split_disconnected_chains(structure, gap_threshold=4.0)
 
             # Step 5: Detect contacts
             contact_info, bonds_to_add, overlaps_to_resolve, intra_chain_contacts = self.overlap_resolver.detect_contacts(structure)
+
+            if bonds_to_add:
+                flags['has_missing_bonds'] = True
+            if overlaps_to_resolve:
+                flags['has_steric_overlaps'] = True
 
             # Step 6: Resolve overlaps first
             self.overlap_resolver.resolve_intra_chain_clashes(structure, intra_chain_contacts)
@@ -943,8 +955,15 @@ class ComplexFixer:
 
                 update_element_positions(f'{tmp_dir}/{basename}.pdb')
 
-                fix_nonstandard_residues(f'{tmp_dir}/{basename}.pdb', f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb', ligand_coords)
-                print(f'Output file written to {basename}.pdb')
+                fixer_status = fix_nonstandard_residues(f'{tmp_dir}/{basename}.pdb', f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb', ligand_coords)
+                if fixer_status == 'modified_in_shell':
+                    flags['has_modified_residues_in_shell'] = True
+                elif fixer_status == 'missing_atoms_in_shell':
+                    flags['has_missing_atoms_in_shell'] = True
+                elif fixer_status == 'ok':
+                    print(f'Output file written to {basename}.pdb')
+
+        return flags
 
     def wrapper(self, num_cores = 1):
         """
@@ -958,7 +977,25 @@ class ComplexFixer:
 
         system_id_list = self.filtered_subset['system_id'].tolist()
         ligand_id_list = self.filtered_subset['ligand_instance_chain'].tolist()
+        n_total = len(system_id_list)
 
         os.makedirs(f'{DATA_DIR}/CROWN/raw_pdb', exist_ok = True)
 
-        Parallel(n_jobs = num_cores, verbose = 10)(delayed(self.preprocess_file)(system_id, ligand_id) for system_id, ligand_id in zip(system_id_list, ligand_id_list))
+        results = Parallel(n_jobs = num_cores, verbose = 10)(
+            delayed(self.preprocess_file)(system_id, ligand_id)
+            for system_id, ligand_id in zip(system_id_list, ligand_id_list)
+        )
+
+        # Aggregate per-system flags across all results
+        n_missing_bonds            = sum(1 for r in results if r['has_missing_bonds'])
+        n_steric_overlaps          = sum(1 for r in results if r['has_steric_overlaps'])
+        n_missing_atoms_in_shell   = sum(1 for r in results if r['has_missing_atoms_in_shell'])
+        n_modified_residues_in_shell = sum(1 for r in results if r['has_modified_residues_in_shell'])
+
+        with open(f'{DATA_DIR}/CROWN/corrections.txt', 'w') as f:
+            f.write(f"\n{'='*52}\n")
+            f.write(f"  Structure fixer — summary ({n_total} input systems)\n")
+            f.write(f"  Missing bonds (inter-chain)       : {n_missing_bonds:>6}  ({100*n_missing_bonds/n_total:.1f}%)\n")
+            f.write(f"  Steric overlaps between chains    : {n_steric_overlaps:>6}  ({100*n_steric_overlaps/n_total:.1f}%)\n")
+            f.write(f"  Missing atoms within shell        : {n_missing_atoms_in_shell:>6}  ({100*n_missing_atoms_in_shell/n_total:.1f}%)\n")
+            f.write(f"  Modified residues within shell    : {n_modified_residues_in_shell:>6}  ({100*n_modified_residues_in_shell/n_total:.1f}%)\n")
