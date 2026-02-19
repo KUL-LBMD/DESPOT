@@ -7,7 +7,8 @@ import tempfile
 import numpy as np
 import pandas as pd
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdDetermineBonds
+from rdkit.Chem import AllChem, rdDetermineBonds, rdmolops
+
 from scipy.spatial import KDTree
 from pdbfixer import PDBFixer
 from openmmforcefields.generators import SystemGenerator
@@ -15,6 +16,7 @@ from openmm.app import PDBFile, Modeller, ForceField, Simulation
 from openff.toolkit import Molecule
 from openff.units import unit as openff_unit
 from openff.nagl_models import list_available_nagl_models
+from openff.nagl import GNNModel
 from openmm import CustomExternalForce, LangevinMiddleIntegrator, unit, Platform
 import logging
 from collections import defaultdict
@@ -113,11 +115,22 @@ def assign_charges_with_fallback(molecule: Molecule) -> Molecule:
     # --- Attempt 2: NAGL GNN charge model ---
     try:
         # Prefer the most recent am1bcc-equivalent model
-        model_path = str(next(m for m in list_available_nagl_models() if m.name == 'openff-gnn-am1bcc-1.0.0.pt'))
+        available_models = list_available_nagl_models()
+
+        # Prefer the stable release am1bcc model
+        preferred = [m for m in available_models if 'am1bcc' in str(m)]
+        model_path = preferred[-1] if preferred else available_models[-1]
         logger.info(f"Using NAGL model: {model_path}")
-        molecule.assign_partial_charges('nagl', nagl_model=model_path)
+
+        # NAGLToolkitWrapper must be called directly; nagl_model is not a valid
+        # kwarg to the standard assign_partial_charges() dispatch method
+        nagl_model = GNNModel.load(model_path, eval_mode=True)
+        charges = nagl_model.compute_property(molecule, as_numpy=True)
+        molecule.partial_charges = charges * openff_unit.elementary_charge
+
         logger.info(f"Charges assigned via NAGL for '{molecule.name}'.")
         return molecule
+
     except Exception as e:
         logger.error(f"NAGL charge assignment also failed for '{molecule.name}': {e}")
         raise
@@ -286,6 +299,45 @@ def add_bonds(topology, positions, resname_set):
                         if dist < 0.18 and not 'H' in (ei, ej):  # 1.8 Å in nm
                             topology.addBond(atoms[i], atoms[j])
 
+def add_seqres_with_caps(input_pdb: str, output_pdb: str):
+	"""
+	Add SEQRES records with ACE/NME caps to a PDB file.
+	PDBFixer will then detect these as 'missing' and build them.
+	"""
+
+	# First, read the structure to get chain sequences
+	pdb = PDBFile(input_pdb)
+
+	# Build sequence for each chain
+	chain_sequences = {}
+	for chain in pdb.topology.chains():
+		residues = list(chain.residues())
+		protein_residues = [r for r in residues if r.name in STANDARD_AA]
+
+		if len(protein_residues) > 2:
+			# Add ACE at start, NME at end
+			seq = ['ACE'] + [r.name for r in protein_residues] + ['NME']
+			chain_sequences[chain.id] = seq
+
+	# Now write modified PDB with SEQRES records
+	with open(input_pdb, 'r') as f_in, open(output_pdb, 'w') as f_out:
+		# First write SEQRES records for each chain
+		for chain_id, seq in chain_sequences.items():
+			# SEQRES records: max 13 residues per line
+			for i in range(0, len(seq), 13):
+				chunk = seq[i:i+13]
+				line_num = (i // 13) + 1
+				seqres_line = f"SEQRES {line_num:>3} {chain_id} {len(seq):>4}  "
+				seqres_line += " ".join(f"{res:>3}" for res in chunk)
+				f_out.write(seqres_line + '\n')
+
+		# Then copy the rest of the file (skip existing SEQRES lines)
+		for line in f_in:
+			if not line.startswith('SEQRES'):
+				f_out.write(line)
+
+	return chain_sequences
+
 def prepare_charmm(pdb_path, resname_set):
 	"""
 	Prepare modeller and force field list for CHARMM
@@ -315,9 +367,16 @@ def prepare_amber_special(pdb_path, resname_set):
 	Prepare modeller and force field list for special AMBER residues
 	"""
 
-	Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/protonation/special_residues_amber.xml')
-	fixer = PDBFixer(pdb_path)
+	# Add SEQRES with caps
+	tmp_path = pdb_path.replace('.pdb', '_seqres.pdb')
+	chain_seqs = add_seqres_with_caps(pdb_path, tmp_path)
 
+	Modeller.loadHydrogenDefinitions(f'{DATA_DIR}/CROWN/custom_xml/protonation/special_residues_amber.xml')
+	fixer = PDBFixer(tmp_path)
+
+	fixer.findMissingResidues()
+	fixer.findMissingAtoms()
+	fixer.addMissingAtoms()
 	fixer.addMissingHydrogens(PH)
 
 	logging.getLogger("openff").setLevel(logging.ERROR)
@@ -332,7 +391,13 @@ def prepare_amber_special(pdb_path, resname_set):
 
 def prepare_amber_regular(pdb_path):
 
-	fixer = PDBFixer(pdb_path)
+	tmp_path = pdb_path.replace('.pdb', '_seqres.pdb')
+	chain_seqs = add_seqres_with_caps(pdb_path, tmp_path)
+
+	fixer = PDBFixer(tmp_path)
+	fixer.findMissingResidues()
+	fixer.findMissingAtoms()
+	fixer.addMissingAtoms()
 	fixer.addMissingHydrogens(PH)
 
 	logging.getLogger("openff").setLevel(logging.ERROR)
@@ -398,7 +463,7 @@ def refine_system(input_dir):
 			for ligand_file in sorted(os.listdir(tmp_dir)):
 				if ligand_file.endswith('_h.sdf'):
 					basename = ligand_file.replace('_h.sdf', '')
-					ligand_mol = Molecule.from_file(f'{tmp_dir}/{ligand_file}')
+					ligand_mol = Molecule.from_file(f'{tmp_dir}/{ligand_file}', allow_undefined_stereo=True)
 					ligand_mol = assign_charges_with_fallback(ligand_mol)
 					ligand_molecules.append(ligand_mol)
 
@@ -426,12 +491,11 @@ def refine_system(input_dir):
 			for _, _, indices in ligand_entries:
 				ligand_indices.update(i for i in indices if all_atoms[i].element.symbol != 'H')
 
-			mobile_indices = ligand_indices.copy()
 			for residue in modeller.topology.residues():
 				if residue.name in {'HEM', 'MGD', 'SF4'}:
 					for atom in residue.atoms():
 						if atom.element.symbol != 'H':
-							mobile_indices.add(atom.index)
+							ligand_indices.add(atom.index)
 
 			system_generator = SystemGenerator(
 				forcefields=forcefield_list, # IMPLICIT WATER MODEL ADDED https://github.com/openmm/openmm/issues/3364
@@ -451,7 +515,7 @@ def refine_system(input_dir):
 			# Use KDTree for more efficient spatial lookup
 			positions = modeller.positions
 			all_positions_nm = np.array([positions[i].value_in_unit(unit.nanometer) for i in range(len(positions))])
-			ligand_indices_list = sorted(mobile_indices)
+			ligand_indices_list = sorted(ligand_indices)
 			ligand_positions_nm = all_positions_nm[ligand_indices_list]
 			ligand_tree = KDTree(ligand_positions_nm)
 
@@ -540,8 +604,18 @@ def refine_system(input_dir):
 			minimized_positions = state.getPositions()
 
 			pos_after = state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)
-			rmsd = calc_rmsd(pos_before, pos_after, sorted(mobile_atoms))
-			logger.info(f'{input_dir} - RMSD {rmsd}')
+
+			# Separate atom sets for RMSD reporting
+			all_heavy_atoms = {atom.index for atom in modeller.topology.atoms() if atom.element.symbol != 'H'}
+			mobile_ligand_atoms = sorted(mobile_atoms & ligand_indices)
+			mobile_protein_atoms = sorted(mobile_atoms - ligand_indices)
+			nonmobile_atoms = sorted(all_heavy_atoms - mobile_atoms)
+
+			rmsd_nonmobile = calc_rmsd(pos_before, pos_after, nonmobile_atoms)
+			rmsd_mobile_protein = calc_rmsd(pos_before, pos_after, mobile_protein_atoms)
+			rmsd_mobile_ligand = calc_rmsd(pos_before, pos_after, mobile_ligand_atoms)
+
+			logger.info(f'{input_dir} - RMSD nonmobile: {rmsd_nonmobile:.4f} | mobile protein: {rmsd_mobile_protein:.4f} | mobile ligand: {rmsd_mobile_ligand:.4f}')
 
 			# Save minimized structure as PDB (protein/water only, no ligands)
 			pdb_modeller = Modeller(modeller.topology, minimized_positions)
@@ -565,11 +639,11 @@ def refine_system(input_dir):
 			logger.removeHandler(handler)
 			handler.close()
 
-			return input_dir, rmsd
+			return input_dir, rmsd_nonmobile, rmsd_mobile_protein, rmsd_mobile_ligand
 
 	except Exception as e:
 
 		logger.exception(f"Refinement failed for {input_dir}")
 		logger.removeHandler(handler)
 		handler.close()
-		return None, None
+		return None, None, None, None

@@ -1,6 +1,6 @@
 """
 split_system.py
-~~~~~~~~~~~~
+~~~~~~~~~~~
 Read individual SDF files from a directory, merge them, match against a
 reference PDB, restore missing bonds by proximity, split into connected
 components, classify each by PDB residue name, and write:
@@ -94,6 +94,7 @@ class Bond:
 class Molecule:
     atoms: list[Atom] = field(default_factory=list)
     bonds: list[Bond] = field(default_factory=list)
+    charges: dict[int, int] = field(default_factory=dict)  # 0-indexed atom → formal charge
 
     # -- querying ----------------------------------------------------------
 
@@ -210,6 +211,7 @@ class Molecule:
         """Concatenate multiple Molecules into one, offsetting bond indices."""
         all_atoms: list[Atom] = []
         all_bonds: list[Bond] = []
+        all_charges: dict[int, int] = {}
         offset = 0
         for mol in molecules:
             all_atoms.extend(mol.atoms)
@@ -219,8 +221,10 @@ class Molecule:
                     atom2=bond.atom2 + offset,
                     rest=bond.rest,
                 ))
+            for atom_idx, chg in mol.charges.items():
+                all_charges[atom_idx + offset] = chg
             offset += mol.n_atoms
-        return cls(atoms=all_atoms, bonds=all_bonds)
+        return cls(atoms=all_atoms, bonds=all_bonds, charges=all_charges)
 
     # -- internal ----------------------------------------------------------
 
@@ -240,7 +244,12 @@ class Molecule:
             for b in self.bonds
             if (b.atom1 - 1) in kept_set and (b.atom2 - 1) in kept_set
         ]
-        return Molecule(atoms=new_atoms, bonds=new_bonds)
+        new_charges = {
+            old_to_new[old_idx]: chg
+            for old_idx, chg in self.charges.items()
+            if old_idx in kept_set
+        }
+        return Molecule(atoms=new_atoms, bonds=new_bonds, charges=new_charges)
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +330,22 @@ def read_sdf_v2000(path: Path) -> Molecule:
             rest=ln[6:],
         ))
 
-    return Molecule(atoms=atoms, bonds=bonds)
+    # Parse M  CHG property lines (formal charges)
+    charges: dict[int, int] = {}
+    for i in range(4 + n_atoms + n_bonds, len(lines)):
+        ln = lines[i]
+        if ln.startswith("M  END") or ln.startswith("$$$$"):
+            break
+        if ln.startswith("M  CHG"):
+            # Format: M  CHG  n  aa1 vv1  aa2 vv2 ...
+            parts = ln.split()
+            n_entries = int(parts[2])
+            for j in range(n_entries):
+                atom_1idx = int(parts[3 + 2 * j])      # 1-indexed
+                charge = int(parts[3 + 2 * j + 1])
+                charges[atom_1idx - 1] = charge         # store 0-indexed
+
+    return Molecule(atoms=atoms, bonds=bonds, charges=charges)
 
 
 def read_sdf_directory(directory: Path) -> Molecule:
@@ -362,6 +386,15 @@ def write_sdf(molecules: list[Molecule], path: Path) -> None:
                 fh.write(atom.raw_line + "\n")
             for bond in mol.bonds:
                 fh.write(f"{bond.atom1:3d}{bond.atom2:3d}{bond.rest}")
+            # Write formal charge properties (M  CHG lines, max 8 entries each)
+            if mol.charges:
+                charge_items = sorted(mol.charges.items())  # sorted by atom index
+                for chunk_start in range(0, len(charge_items), 8):
+                    chunk = charge_items[chunk_start:chunk_start + 8]
+                    parts = "".join(
+                        f" {atom_idx + 1:3d} {chg:3d}" for atom_idx, chg in chunk
+                    )
+                    fh.write(f"M  CHG{len(chunk):3d}{parts}\n")
             fh.write("M  END\n")
             fh.write("$$$$\n")
     log.info("Wrote %d entries → %s", len(molecules), path)

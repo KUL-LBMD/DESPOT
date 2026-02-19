@@ -181,20 +181,29 @@ class PLI_Filter:
 		basenames_to_keep = set()
 		num_groups = len(self.df['pdb_id'].unique())
 
+		total_entries = 0
+		removed_file_missing = 0
+		removed_parse_error = 0
+		removed_contacts_atoms = 0
+		removed_maxdev = 0
+
 		for i, (group, rows) in enumerate(self.df.groupby('pdb_id', sort = False)):
 			taken_arrays = []
 
 			print(f'{i} / {num_groups} done')
 
 			for row in rows.itertuples(index = False):
+				total_entries += 1
 				basename = row.basename
 				file_path = f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb'
 				if not os.path.isfile(file_path):
+					removed_file_missing += 1
 					continue
 
 				prot_coords, lig_coords = parse_pdb(file_path)
 
 				if len(prot_coords.shape) != 2 or len(lig_coords.shape) != 2:
+					removed_parse_error += 1
 					continue
 
 				lig_tree = KDTree(lig_coords)
@@ -203,6 +212,7 @@ class PLI_Filter:
 				num_contacts = sum(len(x) for x in idx_4)
 
 				if num_contacts < 10 or lig_coords.shape[0] < 10 or lig_coords.shape[0] > 100:
+					removed_contacts_atoms += 1
 					continue
 
 				# Protein atoms within 6A. Construct local pocket environment for ICP rigid-body alignment
@@ -222,40 +232,30 @@ class PLI_Filter:
 				if not redundant:
 					basenames_to_keep.add(basename)
 					taken_arrays.append(current_arr)
+				else:
+					removed_maxdev += 1
+
+		# Report
+		kept = len(basenames_to_keep)
+		report_path = DATA_DIR / 'CROWN' / 'metadata' / 'prune_maxdev_report.txt'
+		with open(report_path, 'w') as f:
+			f.write('=' * 60 + '\n')
+			f.write('prune_maxdev report\n')
+			f.write('=' * 60 + '\n')
+			f.write(f'{"Total entries processed:":<40} {total_entries}\n')
+			f.write(f'{"Removed (file missing):":<40} {removed_file_missing}\n')
+			f.write(f'{"Removed (parse error):":<40} {removed_parse_error}\n')
+			f.write(f'{"Removed (contacts/atom count):":<40} {removed_contacts_atoms}\n')
+			f.write(f'{"Removed (maxdev < " + str(maxdev_threshold) + "):":<40} {removed_maxdev}\n')
+			f.write(f'{"Entries kept:":<40} {kept}\n')
+			f.write('=' * 60 + '\n')
+		print(f'Report saved to {report_path}')
 
 		# Update dataframe
 		self.df.set_index('basename', drop = False, inplace = True)
 		maxdev_subset = self.df.loc[self.df.index.isin(basenames_to_keep)]
 		return maxdev_subset
 
-	def prune_ccd(self, maxdev_subset, max_count = 500):
-		"""
-		Subsample dataframe entries based on CDD code.
-
-		Parameters
-		----------
-		maxdev_subset [pd.DataFrame]
-		max_count [int]: Maximum number of entries allowed per CCD code
-
-		Returns
-		-------
-		pli_filtered_subset [pd.DataFrame]
-		"""
-
-		value_counts = maxdev_subset['ligand_unique_ccd_code'].value_counts()
-		values_to_remove = value_counts[value_counts > max_count].index
-
-		rows_to_sample = maxdev_subset[maxdev_subset['ligand_unique_ccd_code'].isin(values_to_remove)]
-		rows_to_keep = maxdev_subset[~maxdev_subset['ligand_unique_ccd_code'].isin(values_to_remove)]
-
-		sampled_rows = rows_to_sample.groupby('ligand_unique_ccd_code').sample(n=max_count, random_state = 42)
-		pli_filtered_subset = pd.concat([rows_to_keep, sampled_rows]).sort_index()
-
-		pli_filtered_subset.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv', index = False)
-
-		return pli_filtered_subset
-
 	def wrapper(self, maxdev_threshold = 0.1, max_count = 500):
 		maxdev_subset = self.prune_maxdev(maxdev_threshold = maxdev_threshold)
 		maxdev_subset.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv', index = False, float_format = '%.3f')
-

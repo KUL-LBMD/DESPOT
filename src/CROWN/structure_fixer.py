@@ -55,45 +55,6 @@ def update_element_positions(input_path):
 	with open(input_path, 'w') as f:
 		f.write('\n'.join(line_list))
 
-def add_seqres_with_caps(input_pdb: str, output_pdb: str):
-	"""
-	Add SEQRES records with ACE/NME caps to a PDB file.
-	PDBFixer will then detect these as 'missing' and build them.
-	"""
-
-	# First, read the structure to get chain sequences
-	pdb = PDBFile(input_pdb)
-
-	# Build sequence for each chain
-	chain_sequences = {}
-	for chain in pdb.topology.chains():
-		residues = list(chain.residues())
-		protein_residues = [r for r in residues if r.name in STANDARD_AA]
-
-		if len(protein_residues) > 2:
-			# Add ACE at start, NME at end
-			seq = ['ACE'] + [r.name for r in protein_residues] + ['NME']
-			chain_sequences[chain.id] = seq
-
-	# Now write modified PDB with SEQRES records
-	with open(input_pdb, 'r') as f_in, open(output_pdb, 'w') as f_out:
-		# First write SEQRES records for each chain
-		for chain_id, seq in chain_sequences.items():
-			# SEQRES records: max 13 residues per line
-			for i in range(0, len(seq), 13):
-				chunk = seq[i:i+13]
-				line_num = (i // 13) + 1
-				seqres_line = f"SEQRES {line_num:>3} {chain_id} {len(seq):>4}  "
-				seqres_line += " ".join(f"{res:>3}" for res in chunk)
-				f_out.write(seqres_line + '\n')
-
-		# Then copy the rest of the file (skip existing SEQRES lines)
-		for line in f_in:
-			if not line.startswith('SEQRES'):
-				f_out.write(line)
-
-	return chain_sequences
-
 def is_nonstandard_residue(residue, chain_residues):
 	"""
 	Nonstandard residues should have all required backbone elements and should be flanked by standard residues
@@ -103,23 +64,22 @@ def is_nonstandard_residue(residue, chain_residues):
 	if {'C', 'N', 'O'}.issubset(elements):
 		# Must be flanked by standard residues
 		res_list = chain_residues[residue.chain.index]
-		if len(res_list) > 10:
-			local_idx = next(i for i, r in enumerate(res_list) if r == residue)
-			if local_idx != 0 and local_idx != len(res_list) - 1:
-				prev_res = res_list[local_idx - 1]
-				next_res = res_list[local_idx + 1]
-				if prev_res.name in FIXED_RESIDUES or next_res.name in FIXED_RESIDUES:
-					return True
+		local_idx = next(i for i, r in enumerate(res_list) if r == residue)
+		if local_idx != 0 and local_idx != len(res_list) - 1:
+			prev_res = res_list[local_idx - 1]
+			next_res = res_list[local_idx + 1]
+			if prev_res.name in FIXED_RESIDUES or next_res.name in FIXED_RESIDUES:
+				return True
 
-			elif local_idx == 0:
-				next_res = res_list[local_idx + 1]
-				if next_res.name in FIXED_RESIDUES:
-					return True
+		elif local_idx == 0 and len(res_list) > 1:
+			next_res = res_list[local_idx + 1]
+			if next_res.name in FIXED_RESIDUES:
+				return True
 
-			elif local_idx == len(res_list) - 1:
-				prev_res = res_list[local_idx - 1]
-				if prev_res.name in FIXED_RESIDUES:
-					return True
+		elif local_idx == len(res_list) - 1 and len(res_list) > 1:
+			prev_res = res_list[local_idx - 1]
+			if prev_res.name in FIXED_RESIDUES:
+				return True
 
 	return False
 
@@ -136,10 +96,7 @@ def fix_nonstandard_residues(input_path, output_path, ligand_coords):
 
 	"""
 
-	tmp_path = input_path.replace('.pdb', '_seqres.pdb')
-	chain_seqs = add_seqres_with_caps(input_path, tmp_path)
-
-	fixer = PDBFixer(filename=tmp_path)
+	fixer = PDBFixer(filename=input_path)
 	fixer.findNonstandardResidues()
 
 	# Build a list of residues per chain for neighbor lookup
