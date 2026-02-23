@@ -75,10 +75,115 @@ class DESPOT_Builder:
         self.sigma_r = 1
         self.sigma_angle = 1
 
+    def _sh_heat_filter(self, lmax, sigma_rad):
+        """
+        Spherical heat kernel filter coefficients.
+        Analog of Gaussian smoothing on S²: each degree-l coefficient is
+        multiplied by exp(-l(l+1) * sigma² / 2).
+
+        Parameters
+        ----------
+        lmax : int
+            Maximum spherical harmonic degree.
+        sigma_rad : float
+            Smoothing width in radians. Comparable to the Gaussian sigma
+            projected onto the sphere.
+
+        Returns
+        -------
+        taper : np.ndarray of shape (lmax+1,)
+        """
+        ls = np.arange(lmax + 1)
+        return np.exp(-ls * (ls + 1) * sigma_rad ** 2 / 2.0)
+
+    def _sh_smooth_2d(self, angular_slice, sigma_rad):
+        """
+        Smooth a 1D function of colatitude (axial / zonal symmetry) using
+        spherical harmonics.
+
+        The 2D theta grid [0°, 180°) in 3° steps (60 bins) already spans the
+        full colatitude range.  We tile it across longitude to build a zonal
+        DH2 grid, expand, filter, reconstruct, and return the zonal profile.
+
+        Parameters
+        ----------
+        angular_slice : ndarray, shape (n_theta,)   — n_theta = 60
+        sigma_rad     : float, smoothing width in radians
+
+        Returns
+        -------
+        smoothed : ndarray, shape (n_theta,)
+        """
+        n_theta = angular_slice.shape[0]          # 60
+        n_lon = 2 * n_theta                       # 120  → DH2 sampling
+
+        # Build zonal grid: replicate across all longitudes
+        grid_2d = np.tile(angular_slice[:, np.newaxis], (1, n_lon))
+        sh_grid = pyshtools.SHGrid.from_array(grid_2d, grid='DH', copy=True)
+        coeffs = sh_grid.expand()
+
+        # Apply heat-kernel taper
+        taper = self._sh_heat_filter(coeffs.lmax, sigma_rad)
+        for l_deg in range(coeffs.lmax + 1):
+            coeffs.coeffs[:, l_deg, :l_deg + 1] *= taper[l_deg]
+
+        # Reconstruct and take the first longitude column (zonal)
+        smoothed_grid = coeffs.expand(grid='DH', lmax_calc=coeffs.lmax)
+        return smoothed_grid.to_array()[:n_theta, 0]
+
+    def _sh_smooth_3d(self, angular_slice, sigma_rad):
+        """
+        Smooth a 2D function on the quarter-sphere θ∈[0,90°), ϕ∈[0,180°)
+        using spherical harmonics with even-symmetry extension.
+
+        Symmetry: f(180°−θ, ϕ) = f(θ, ϕ)  and  f(θ, 360°−ϕ) = f(θ, ϕ)
+
+        After mirroring → (60, 120) DH2 grid, lmax = 29.
+
+        Parameters
+        ----------
+        angular_slice : ndarray, shape (n_theta, n_phi) — (30, 60)
+        sigma_rad     : float
+
+        Returns
+        -------
+        smoothed : ndarray, shape (n_theta, n_phi) — (30, 60)
+        """
+        n_theta, n_phi = angular_slice.shape       # (30, 60)
+
+        # --- mirror theta: [0,90°) → [0,180°) --------------------------------
+        # Rows 0..29 → θ = 0°,3°,...,87°
+        # Rows 30..59 → θ = 90°,93°,...,177°  copied from rows 29,28,...,0
+        theta_full = np.concatenate(
+            [angular_slice, angular_slice[::-1, :]], axis=0
+        )  # (60, 60)
+
+        # --- mirror phi: [0,180°) → [0,360°) ---------------------------------
+        # Cols 0..59  → ϕ = 0°,3°,...,177°
+        # Cols 60..119 → ϕ = 180°,183°,...,357° copied from cols 59,58,...,0
+        full_sphere = np.concatenate(
+            [theta_full, theta_full[:, ::-1]], axis=1
+        )  # (60, 120)
+
+        # --- SH expand, filter, reconstruct -----------------------------------
+        sh_grid = pyshtools.SHGrid.from_array(full_sphere, grid='DH', copy=True)
+        coeffs = sh_grid.expand()
+
+        taper = self._sh_heat_filter(coeffs.lmax, sigma_rad)
+        for l_deg in range(coeffs.lmax + 1):
+            coeffs.coeffs[:, l_deg, :l_deg + 1] *= taper[l_deg]
+
+        smoothed_full = coeffs.expand(grid='DH', lmax_calc=coeffs.lmax).to_array()
+
+        # Take back the original quarter-sphere
+        return smoothed_full[:n_theta, :n_phi]
+
     def blur_counts(self):
         """
         Applies volume normalization and Gaussian smoothing on raw counts
         """
+
+        sigma_angle_rad = np.deg2rad(self.sigma_angle * 3.0)  # convert bin-units → radians
 
         # 1D case
         volume_corrections_1d = np.zeros((self.counts_1d.shape[2]))
@@ -105,7 +210,20 @@ class DESPOT_Builder:
                 volume_corrections_2d[i,j] = 2 * np.pi * theta_factor * r_factor
 
         normalized_counts_2d = self.counts_2d / volume_corrections_2d[np.newaxis, np.newaxis, :, :]
-        self.rho_2d = gaussian_filter(normalized_counts_2d, sigma = [0, 0, self.sigma_r, self.sigma_angle])
+
+        # Radial smoothing first (Gaussian along r axis)
+        rho_2d = gaussian_filter1d(normalized_counts_2d, sigma=self.sigma_r, axis=2)
+
+        # SH angular smoothing: loop over each (protein_type, ligand_type, r_shell)
+        n_p, n_l, n_r, n_theta = rho_2d.shape
+        for ip in range(n_p):
+            for il in range(n_l):
+                for ir in range(n_r):
+                    rho_2d[ip, il, ir, :] = self._sh_smooth_2d(
+                        rho_2d[ip, il, ir, :], sigma_angle_rad
+                    )
+
+        self.rho_2d = rho_2d
 
         # 3D case
         volume_corrections_3d = np.zeros((self.counts_3d.shape[2], self.counts_3d.shape[3], self.counts_3d.shape[4]))
@@ -127,7 +245,20 @@ class DESPOT_Builder:
                     volume_corrections_3d[i,j,k] = 4 * phi_factor * theta_factor * r_factor 
 
         normalized_counts_3d = self.counts_3d / volume_corrections_3d[np.newaxis, np.newaxis, :, :, :]
-        self.rho_3d = gaussian_filter(normalized_counts_3d, sigma = [0, 0, self.sigma_r, self.sigma_angle, self.sigma_angle])
+
+        # Radial smoothing first (Gaussian along r axis)
+        rho_3d = gaussian_filter1d(normalized_counts_3d, sigma=self.sigma_r, axis=2)
+
+        # SH angular smoothing: loop over each (protein_type, ligand_type, r_shell)
+        n_p, n_l, n_r, n_theta, n_phi = rho_3d.shape
+        for ip in range(n_p):
+            for il in range(n_l):
+                for ir in range(n_r):
+                    rho_3d[ip, il, ir, :, :] = self._sh_smooth_3d(
+                        rho_3d[ip, il, ir, :, :], sigma_angle_rad
+                    )
+
+        self.rho_3d = rho_3d
 
     def counts_to_prob(self):
         """P(l | p, r) = n(p,l,r) / sum_l{n(p,l,r)}"""

@@ -312,7 +312,7 @@ def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 	chain_sequences = {}
 	for chain in pdb.topology.chains():
 		residues = list(chain.residues())
-		protein_residues = [r for r in residues if r.name in STANDARD_AA]
+		protein_residues = [r for r in residues if r.name in STANDARD_AMINO_ACIDS]
 
 		if len(protein_residues) > 2:
 			# Add ACE at start, NME at end

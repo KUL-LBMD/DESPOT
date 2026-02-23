@@ -850,61 +850,72 @@ class ComplexFixer:
             'has_steric_overlaps': False,
             'has_missing_atoms_in_shell': False,
             'has_modified_residues_in_shell': False,
+            'failure_reason': None,  # None means success
         }
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        basename = system_id.lower() + '_' + ligand_id.lower()
 
-            # Step 1: Analyze occupancy
-            input_path = SOURCE_DB_PATH / 'systems' / system_id / 'system.cif'
-            self.occupancy_handler.analyze_occupancy(input_path)
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
 
-            # Step 2: Remove artefacts and fix file formatting
-            basename = system_id.lower() + '_' + ligand_id.lower()
-            tmp_path = f'{tmp_dir}/{basename}.cif'
-            self.artifact_remover.remove_artifacts_and_fix_quotes(
-                input_path, tmp_path, self.occupancy_handler
-            )
+                # Step 1: Analyze occupancy
+                input_path = SOURCE_DB_PATH / 'systems' / system_id / 'system.cif'
+                self.occupancy_handler.analyze_occupancy(input_path)
 
-            # Step 3: Load structure
-            cif_bool = is_valid_cif(tmp_path)
-            if not cif_bool:
-                return flags
-            parser = MMCIFParser(QUIET = True, structure_builder = NonUniqueStructureBuilder())
-            structure = parser.get_structure('system', tmp_path)
+                # Step 2: Remove artefacts and fix file formatting
+                tmp_path = f'{tmp_dir}/{basename}.cif'
+                self.artifact_remover.remove_artifacts_and_fix_quotes(
+                    input_path, tmp_path, self.occupancy_handler
+                )
 
-            # Step 3b: Strip hydrogens
-            atoms_to_remove = [atom for atom in structure.get_atoms() if atom.element == 'H']
-            for atom in atoms_to_remove:
-                atom.get_parent().detach_child(atom.id)
+                # Step 3: Load structure
+                cif_bool = is_valid_cif(tmp_path)
+                if not cif_bool:
+                    flags['failure_reason'] = 'invalid_cif'
+                    return flags
+                parser = MMCIFParser(QUIET = True, structure_builder = NonUniqueStructureBuilder())
+                structure = parser.get_structure('system', tmp_path)
 
-            # Step 4: Chain mapping from CIF to PDB
-            chain_mapping = self.overlap_resolver.create_chain_mapping(structure, ligand_id)
-            lig_bool = self.overlap_resolver.rename_chains(structure, chain_mapping)
-            if not lig_bool:
-                return flags
+                # Step 3b: Strip hydrogens
+                atoms_to_remove = [atom for atom in structure.get_atoms() if atom.element == 'H']
+                for atom in atoms_to_remove:
+                    atom.get_parent().detach_child(atom.id)
 
-            # Step 4b: Split chains that have disconnected segments (gap > 4 Å)
-            self.overlap_resolver.split_disconnected_chains(structure, gap_threshold=4.0)
+                # Step 4: Chain mapping from CIF to PDB
+                chain_mapping = self.overlap_resolver.create_chain_mapping(structure, ligand_id)
+                lig_bool = self.overlap_resolver.rename_chains(structure, chain_mapping)
+                if not lig_bool:
+                    flags['failure_reason'] = 'no_ligand_chain'
+                    return flags
 
-            # Step 5: Detect contacts
-            contact_info, bonds_to_add, overlaps_to_resolve, intra_chain_contacts = self.overlap_resolver.detect_contacts(structure)
+                # Step 4b: Split chains that have disconnected segments (gap > 4 Å)
+                self.overlap_resolver.split_disconnected_chains(structure, gap_threshold=4.0)
 
-            if bonds_to_add:
-                flags['has_missing_bonds'] = True
-            if overlaps_to_resolve:
-                flags['has_steric_overlaps'] = True
+                # Step 5: Detect contacts
+                contact_info, bonds_to_add, overlaps_to_resolve, intra_chain_contacts = self.overlap_resolver.detect_contacts(structure)
 
-            # Step 6: Resolve overlaps first
-            self.overlap_resolver.resolve_intra_chain_clashes(structure, intra_chain_contacts)
-            self.overlap_resolver.resolve_overlaps(structure, overlaps_to_resolve)
+                if bonds_to_add:
+                    flags['has_missing_bonds'] = True
+                if overlaps_to_resolve:
+                    flags['has_steric_overlaps'] = True
 
-            # Step 7: Merge bonded chains
-            self.overlap_resolver.merge_bonded_chains(structure, bonds_to_add)
-            atom_count = self.overlap_resolver.rename_ligand(structure)
+                # Step 6: Resolve overlaps first
+                self.overlap_resolver.resolve_intra_chain_clashes(structure, intra_chain_contacts)
+                self.overlap_resolver.resolve_overlaps(structure, overlaps_to_resolve)
 
-            ligand_coords = np.array([atom.get_vector().get_array() for model in structure for chain in model if chain.id == 'Z' for residue in chain for atom in residue])
+                # Step 7: Merge bonded chains
+                self.overlap_resolver.merge_bonded_chains(structure, bonds_to_add)
+                atom_count = self.overlap_resolver.rename_ligand(structure)
 
-            if atom_count >= 10 and atom_count <= 100:
+                ligand_coords = np.array([atom.get_vector().get_array() for model in structure for chain in model if chain.id == 'Z' for residue in chain for atom in residue])
+
+                if atom_count < 10:
+                    flags['failure_reason'] = 'ligand_too_small'
+                    return flags
+                if atom_count > 100:
+                    flags['failure_reason'] = 'ligand_too_large'
+                    return flags
+
                 # Step 8: save output
                 io = PDBIO()
                 io.set_structure(structure)
@@ -915,10 +926,17 @@ class ComplexFixer:
                 fixer_status = fix_nonstandard_residues(f'{tmp_dir}/{basename}.pdb', f'{DATA_DIR}/CROWN/raw_pdb/{basename}.pdb', ligand_coords)
                 if fixer_status == 'modified_in_shell':
                     flags['has_modified_residues_in_shell'] = True
+                    flags['failure_reason'] = 'modified_residues_in_shell'
                 elif fixer_status == 'missing_atoms_in_shell':
                     flags['has_missing_atoms_in_shell'] = True
+                    flags['failure_reason'] = 'missing_atoms_in_shell'
+                elif fixer_status is None:
+                    flags['failure_reason'] = 'null_elements_in_topology'
                 elif fixer_status == 'ok':
                     print(f'Output file written to {basename}.pdb')
+
+        except Exception as e:
+            flags['failure_reason'] = f'exception: {type(e).__name__}: {e}'
 
         return flags
 
@@ -949,10 +967,42 @@ class ComplexFixer:
         n_missing_atoms_in_shell   = sum(1 for r in results if r['has_missing_atoms_in_shell'])
         n_modified_residues_in_shell = sum(1 for r in results if r['has_modified_residues_in_shell'])
 
+        # Aggregate failure reasons
+        n_success = sum(1 for r in results if r['failure_reason'] is None)
+        failure_counts = defaultdict(int)
+        for r in results:
+            reason = r['failure_reason']
+            if reason is not None:
+                # Group exceptions under a common key for the summary table,
+                # but keep individual messages for the detailed log
+                key = reason if not reason.startswith('exception:') else 'exception'
+                failure_counts[key] += 1
+
         with open(f'{DATA_DIR}/CROWN/corrections.txt', 'w') as f:
-            f.write(f"\n{'='*52}\n")
+            f.write(f"\n{'='*60}\n")
             f.write(f"  Structure fixer — summary ({n_total} input systems)\n")
-            f.write(f"  Missing bonds (inter-chain)       : {n_missing_bonds:>6}  ({100*n_missing_bonds/n_total:.1f}%)\n")
-            f.write(f"  Steric overlaps between chains    : {n_steric_overlaps:>6}  ({100*n_steric_overlaps/n_total:.1f}%)\n")
-            f.write(f"  Missing atoms within shell        : {n_missing_atoms_in_shell:>6}  ({100*n_missing_atoms_in_shell/n_total:.1f}%)\n")
-            f.write(f"  Modified residues within shell    : {n_modified_residues_in_shell:>6}  ({100*n_modified_residues_in_shell/n_total:.1f}%)\n")
+            f.write(f"{'='*60}\n\n")
+
+            f.write(f"  Successfully written          : {n_success:>6}  ({100*n_success/n_total:.1f}%)\n")
+            f.write(f"  Failed                        : {n_total - n_success:>6}  ({100*(n_total - n_success)/n_total:.1f}%)\n\n")
+
+            f.write(f"  --- Failure breakdown ---\n")
+            f.write(f"  Invalid CIF                   : {failure_counts.get('invalid_cif', 0):>6}\n")
+            f.write(f"  No ligand chain found         : {failure_counts.get('no_ligand_chain', 0):>6}\n")
+            f.write(f"  Ligand too small (<10 atoms)  : {failure_counts.get('ligand_too_small', 0):>6}\n")
+            f.write(f"  Ligand too large (>100 atoms) : {failure_counts.get('ligand_too_large', 0):>6}\n")
+            f.write(f"  Null elements in topology     : {failure_counts.get('null_elements_in_topology', 0):>6}\n")
+            f.write(f"  Modified residues in shell     : {failure_counts.get('modified_residues_in_shell', 0):>6}\n")
+            f.write(f"  Missing atoms in shell         : {failure_counts.get('missing_atoms_in_shell', 0):>6}\n")
+            f.write(f"  Uncaught exceptions            : {failure_counts.get('exception', 0):>6}\n\n")
+
+            f.write(f"  --- Correction flags (among all systems) ---\n")
+            f.write(f"  Missing bonds (inter-chain)    : {n_missing_bonds:>6}  ({100*n_missing_bonds/n_total:.1f}%)\n")
+            f.write(f"  Steric overlaps between chains : {n_steric_overlaps:>6}  ({100*n_steric_overlaps/n_total:.1f}%)\n")
+
+            # Log individual exceptions for debugging
+            exceptions = [(r['failure_reason']) for r in results if r['failure_reason'] and r['failure_reason'].startswith('exception:')]
+            if exceptions:
+                f.write(f"\n  --- Exception details ---\n")
+                for exc in exceptions:
+                    f.write(f"  {exc}\n")
