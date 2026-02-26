@@ -1,7 +1,8 @@
 import pandas as pd
 import os
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
+import signal
+from joblib import Parallel, delayed
 
 # Set some variables for running the scripts
 NUM_CORES = 96
@@ -23,6 +24,33 @@ from src.CROWN.pli_filter import PLI_Filter
 from src.CROWN.system_fixer import split_system
 from src.CROWN.structure_refiner_test import refine_system
 from src.config import DATA_DIR, SOURCE_DB_PATH
+
+class _RefinementTimeout(Exception):
+	pass
+
+def _timeout_handler(signum, frame):
+	raise _RefinementTimeout()
+
+def refine_with_timeout(basename, timeout=REFINE_TIMEOUT):
+	"""
+	Run refine_system with a hard time limit using SIGALRM.
+	Works inside joblib/loky workers on Linux because each
+	worker executes tasks in its main thread.
+	"""
+	old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+	signal.alarm(timeout)
+	try:
+		result = refine_system(basename)
+		signal.alarm(0)
+		return result
+	except _RefinementTimeout:
+		print(f"[TIMEOUT] {basename} exceeded {timeout}s — skipping.")
+		return None
+	except Exception:
+		signal.alarm(0)
+		raise
+	finally:
+		signal.signal(signal.SIGALRM, old_handler)
 
 def main():
 	"""
@@ -66,23 +94,7 @@ def main():
 #		) for row in df.itertuples())
 
 	# Step 5: Protonate and energy-minimize
-	with ProcessPoolExecutor(max_workers=NUM_CORES) as executor:
-		futures = {
-			executor.submit(refine_system, row.basename): row.basename
-			for row in subset.itertuples()
-		}
-
-		results = []
-
-		for future in as_completed(futures):
-			name = futures[future]
-			try:
-				result = future.result(timeout=REFINE_TIMEOUT)
-				results.append(result)
-			except TimeoutError:
-				print(f"[TIMEOUT] {name}")
-			except Exception as e:
-				print(f"[ERROR] {name}: {e}")
+	tuple_list = Parallel(n_jobs = 96, verbose = 10)(delayed(refine_with_timeout)(row.basename) for row in subset.itertuples())
 
 	rmsd_df = pd.DataFrame(results, columns = ['dirname', 'rmsd_nonmobile', 'rmsd_pocket', 'rmsd_ligand']).dropna()
 	rmsd_df.to_csv('mobile_rmsd.csv', index = False)

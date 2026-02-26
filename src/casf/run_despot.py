@@ -9,10 +9,10 @@ import os
 from joblib import Parallel, delayed
 import math
 
-def run_scoring():
-	scorer1 = DESPOT_Scorer() # DESPOT
-	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif') # DESPOT-Iso
-	scorer3 = DESPOT_Isotropic_Scorer(mode = 'drugscore') # DESPOT-DS
+def run_scoring(database):
+	scorer1 = DESPOT_Scorer(database) # DESPOT
+	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif', database = database) # DESPOT-Iso
+	scorer3 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-DS
 	converter = MolConverter()
 
 	# 1.1-1.2: Scoring + ranking power
@@ -43,14 +43,14 @@ def run_scoring():
 	df2 = score_df[['pdb_id', 'logKa', 'score2']].copy().rename(columns = {'score2': 'score'})
 	df3 = score_df[['pdb_id', 'logKa', 'score3']].copy().rename(columns = {'score3': 'score'})
 
-	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_scorepower.csv', index = False, float_format = '%.4f')
-	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_scorepower.csv', index = False, float_format = '%.4f')
-	df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_scorepower.csv', index = False, float_format = '%.4f')
+	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
+	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
+	df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
 
-def run_docking():
-	scorer1 = DESPOT_Scorer() # DESPOT
-	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif') # DESPOT-Iso
-	scorer3 = DESPOT_Isotropic_Scorer(mode = 'drugscore') # DESPOT-DS
+def run_docking(database):
+	scorer1 = DESPOT_Scorer(database) # DESPOT
+	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif', database = database) # DESPOT-Iso
+	scorer3 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-DS
 	converter = MolConverter()
 
 	print('Starting docking benchmark')
@@ -101,22 +101,22 @@ def run_docking():
 	df2 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score2']].copy().rename(columns = {'score2': 'score'})
 	df3 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score3']].copy().rename(columns = {'score3': 'score'})
 
-	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_dockingpower.csv', index = False, float_format = '%.4f')
-	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_dockingpower.csv', index = False, float_format = '%.4f')
-	df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_dockingpower.csv', index = False, float_format = '%.4f')
+	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
+	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
+	df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
 
-def run_screening(n_jobs=-1):
+def run_screening(n_jobs=-1, database = 'CROWN'):
     print('Starting screening benchmark')
     molecule_list = [f'{subdir}_{i+1}' for subdir in sorted(os.listdir(DATA_DIR / 'CASF-2016' / 'coreset')) for i in range(100)]
     target_list = sorted(os.listdir(DATA_DIR / 'CASF-2016' / 'decoys_screening'))
 
     chunk_size = 2000
 
-    def process_target(subdir):
+    def process_target(subdir, database):
         """Process a single target protein against all molecules."""
-        scorer1 = DESPOT_Scorer()
-        scorer2 = DESPOT_Isotropic_Scorer(mode='mif')
-        scorer3 = DESPOT_Isotropic_Scorer(mode='drugscore')
+        scorer1 = DESPOT_Scorer(database)
+        scorer2 = DESPOT_Isotropic_Scorer(mode='mif', database = database)
+        scorer3 = DESPOT_Isotropic_Scorer(mode='drugscore', database = database)
         converter = MolConverter()
 
         prot_df = converter.convert_mol2(f'{DATA_DIR}/CASF-2016/coreset/{subdir}/{subdir}_protein.mol2')
@@ -156,7 +156,7 @@ def run_screening(n_jobs=-1):
 
     # Run in parallel
     results = Parallel(n_jobs=n_jobs)(
-        delayed(process_target)(subdir) for subdir in tqdm(target_list, desc='Screening')
+        delayed(process_target)(subdir, database) for subdir in tqdm(target_list, desc='Screening')
     )
 
     # Stack results into final array
@@ -200,4 +200,4 @@ def run_screening(n_jobs=-1):
             axis=1
         )
 
-        df_long.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_screeningpower.csv', float_format='%.4f')
+        df_long.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/{name}_{database.lower()}_screeningpower.csv', float_format='%.4f')

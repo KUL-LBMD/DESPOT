@@ -31,7 +31,7 @@ MOBILE_RADIUS = 0.6  # Distance in nm (6 Å = 0.6 nm)
 FIX_STRENGTH = 1000000.0  # kJ/mol/nm² - very high to effectively freeze atoms
 TETHER_STRENGTH = 10 # kcal/(mol*A^2). Default parameter in MOE
 TETHER_FLATBOTTOM = 0.25 # Within 0.25 A radius, atoms feel no tethering force
-MINIMIZATION_STEPS = 5000
+MINIMIZATION_STEPS = 1
 ENERGY_REPORT_INTERVAL = 50
 TEMPERATURE = 300  # Kelvin
 TIMESTEP = 0.002  # picoseconds
@@ -102,8 +102,8 @@ def assign_charges_with_fallback(molecule: Molecule) -> Molecule:
 
     # --- Attempt 1: standard am1bcc via AmberTools (sqm) ---
     try:
-        molecule.assign_partial_charges('am1bcc')
-        logger.info(f"Charges assigned via am1bcc for '{molecule.name}'.")
+        molecule.assign_partial_charges('gasteiger')
+        logger.info(f"Charges assigned via Gasteiger for '{molecule.name}'.")
         return molecule
     except Exception as e:
         logger.warning(
@@ -213,20 +213,22 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 				for charge in [formal_charge] + [formal_charge + d for d in (1, -1, 2, -2, 3, -3)]:
 					try:
 						rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
-						break
 					except ValueError:
 						continue
 
 	# Check if molecule is fully connected
 	frags = rdmolops.GetMolFrags(mol)
 	if len(frags) > 1:
-		rdDetermineBonds.DetermineBonds(mol)
-		# Check if it's now connected
-		new_frags = rdmolops.GetMolFrags(mol)
-		if len(new_frags) > 1:
-			logger.info(f"  Warning: still {len(new_frags)} fragments after bond determination.")
-		else:
-			logger.info(f"  Successfully connected into a single molecule.")
+		try:
+			rdDetermineBonds.DetermineBonds(mol)
+			# Check if it's now connected
+			new_frags = rdmolops.GetMolFrags(mol)
+			if len(new_frags) > 1:
+				logger.info(f"  Warning: still {len(new_frags)} fragments after bond determination.")
+			else:
+				logger.info(f"  Successfully connected into a single molecule.")
+		except Exception as e:
+			logger.info(f"  DetermineBonds failed: {e}")
 
 	# Strip existing Hs, protonate at target pH
 	mol_noh = Chem.RemoveAllHs(mol)
@@ -579,14 +581,6 @@ def refine_system(input_dir):
 			platform = Platform.getPlatformByName('CPU')
 			properties = {'Threads': '1'}
 
-			# Save original coordinates before energy minimization
-			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
-			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_protonated.pdb'
-			mol2_path = pdb_path.replace('.pdb', '.mol2')
-			with open(pdb_path, 'w') as f:
-				PDBFile.writeFile(modeller.topology, modeller.positions, f)
-			subprocess.run(['obabel', '-ipdb', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
 			simulation = Simulation(modeller.topology, system, integrator, platform, properties)
 			simulation.context.setPositions(modeller.positions)
 
@@ -616,8 +610,9 @@ def refine_system(input_dir):
 			logger.info(f'{input_dir} - RMSD nonmobile: {rmsd_nonmobile:.4f} | mobile protein: {rmsd_mobile_protein:.4f} | mobile ligand: {rmsd_mobile_ligand:.4f}')
 
 			# Save minimized structure as PDB (protein/water only, no ligands)
+			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
 			pdb_modeller = Modeller(modeller.topology, minimized_positions)
-			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_minimized.pdb'
+			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_test.pdb'
 			mol2_path = pdb_path.replace('.pdb', '.mol2')
 			with open(pdb_path, 'w') as f:
 				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
@@ -628,8 +623,8 @@ def refine_system(input_dir):
 				minimized_coords = np.array([minimized_positions[i].value_in_unit(unit.angstrom) for i in atom_indices]) * openff_unit.angstrom
 				ligand_mol.conformers[0] = minimized_coords
 
-				sdf_path = f'{tmp_dir}/{basename}_minimized.sdf'
-				mol2_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/{basename}_minimized.mol2'
+				sdf_path = f'{tmp_dir}/{basename}_test.sdf'
+				mol2_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/{basename}_test.mol2'
 
 				ligand_mol.to_file(sdf_path, file_format='SDF')
 				subprocess.run(['obabel', '-isdf', sdf_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

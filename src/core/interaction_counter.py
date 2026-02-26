@@ -9,15 +9,15 @@ from tqdm import tqdm
 from src.config import DATA_DIR
 from src.atom_typing.parse_mol2 import MolConverter
 
-def _convert_file(filename):
+def _convert_file(filename, database):
     """Convert a single protein-ligand pair. Runs in worker process."""
     converter = MolConverter()
 
     prot_df = converter.convert_mol2(
-        DATA_DIR / 'CROWN' / 'processed_mol2' / 'receptor' / filename
+        DATA_DIR / database / 'processed_mol2' / 'receptor' / filename
     )
     lig_df = converter.convert_mol2(
-        DATA_DIR / 'CROWN' / 'processed_mol2' / 'ligand' / filename
+        DATA_DIR / database / 'processed_mol2' / 'ligand' / filename
     )
 
     return filename, prot_df, lig_df
@@ -27,10 +27,12 @@ class DESPOT_Counter:
     Discretize protein-ligand interactions in geometric bins.
     """
 
-    def __init__(self):
+    def __init__(self, database):
+
+        self.database = database
 
         self.converter = MolConverter()
-        self.file_list = os.listdir(DATA_DIR / 'CROWN' / 'processed_mol2' / 'receptor')
+        self.file_list = os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor')
 
         self.r_bins = np.arange(1.0, 6.0, 0.1)
         self.theta_bins_2d = np.arange(0, 180.0, 3.0)
@@ -39,7 +41,7 @@ class DESPOT_Counter:
 
         # Set types lists for ligand atoms and protein atoms
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' /'atom_type_counts.csv')
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' /f'atom_type_counts_{database.lower()}.csv')
 
         self.types_list_1d = (
             counts_df.loc[
@@ -188,7 +190,26 @@ class DESPOT_Counter:
 
                         self.bin_arr_3d[p_idx, l_idx, r_idx, theta_idx, phi_idx] += 1
 
-    def find_interactions(self, n_workers=4, max_queued=8):
+    def find_interactions(self):
+
+        num_files = len(self.file_list)
+
+        for i, file in enumerate(self.file_list):
+            filename, prot_df, lig_df = _convert_file(file, self.database)
+
+            self._process_interaction_pair(prot_df, lig_df)
+            self._process_interaction_pair(lig_df, prot_df)
+
+            print(f'{i} / {num_files} done')
+
+        np.savez_compressed(
+            DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz',
+            arr_1d=self.bin_arr_1d,
+            arr_2d=self.bin_arr_2d,
+            arr_3d=self.bin_arr_3d
+        )
+
+    def find_interactions_parallel(self, n_workers=4, max_queued=8):
         """
         Loop over all files with parallel MOL2 conversion feeding a processing queue.
         """
@@ -203,7 +224,7 @@ class DESPOT_Counter:
             file_iter = iter(self.file_list)
             
             for f in itertools.islice(file_iter, max_queued):
-                pending.add(executor.submit(_convert_file, f))
+                pending.add(executor.submit(_convert_file, f, self.database))
             
             with tqdm(total=num_files, desc="Processing structures", unit="file") as pbar:
                 while pending:
@@ -227,12 +248,12 @@ class DESPOT_Counter:
                         
                         try:
                             next_file = next(file_iter)
-                            pending.add(executor.submit(_convert_file, next_file))
+                            pending.add(executor.submit(_convert_file, next_file, self.database))
                         except StopIteration:
                             pass
 
         np.savez_compressed(
-            DATA_DIR / 'potentials' / 'despot_counts.npz',
+            DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz',
             arr_1d=self.bin_arr_1d,
             arr_2d=self.bin_arr_2d,
             arr_3d=self.bin_arr_3d

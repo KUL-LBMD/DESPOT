@@ -291,8 +291,11 @@ class DESPOT_Scorer:
     Subsequent calls will be much faster.
     """
 
-    def __init__(self):
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'atom_type_counts.csv')
+    def __init__(self, database):
+
+        self.database = database
+
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'atom_type_counts_{database.lower()}.csv')
         colname1, colname2 = 'total_occurrence', 'total_occurrence'
 
         self.types_list_1d = counts_df.loc[
@@ -326,7 +329,7 @@ class DESPOT_Scorer:
         self.types_set_3d = set(self.types_list_3d)
 
         # Load scores as contiguous float32 arrays
-        loaded = np.load(DATA_DIR / 'potentials' / 'despot_scores.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'despot_scores_{self.database.lower()}.npz')
         self.scores_1d = np.ascontiguousarray(loaded['scores_1d'].astype(np.float32))
         self.scores_2d = np.ascontiguousarray(loaded['scores_2d'].astype(np.float32))
         self.scores_3d = np.ascontiguousarray(loaded['scores_3d'].astype(np.float32))
@@ -390,7 +393,9 @@ class DESPOT_Scorer:
             self.ligand_type_to_idx.get(t, -1) for t in lig_types
         ], dtype=np.int32)
 
+        print(lig_types)
         if not (lig_type_indices >= 0).any():
+            print('No known lig types')
             return b_factors
 
         # Find nearby protein atoms
@@ -498,14 +503,17 @@ def score_iso_kernel(
 class DESPOT_Isotropic_Scorer:
     """Numba-accelerated isotropic-only scorer."""
 
-    def __init__(self, mode):
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'atom_type_counts.csv')
+    def __init__(self, mode, database):
+
+        self.database = database
+
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'atom_type_counts_{database.lower()}.csv')
         colname1, colname2 = 'total_occurrence', 'total_occurrence'
 
         if mode == 'mif':
-            loaded = np.load(DATA_DIR / 'potentials' / 'despot_iso_scores.npz')
+            loaded = np.load(DATA_DIR / 'potentials' / f'despot_iso_scores_{self.database.lower()}.npz')
         else:
-            loaded = np.load(DATA_DIR / 'potentials' / 'despot_ds_scores.npz')
+            loaded = np.load(DATA_DIR / 'potentials' / f'despot_ds_scores_{self.database.lower()}.npz')
 
         self.types_list_1d = counts_df.loc[
             (counts_df['local_reference_frame'] == 'Isotropic') & (counts_df[colname1] > 1000),

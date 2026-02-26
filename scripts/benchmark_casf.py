@@ -22,10 +22,8 @@ import os
 # Name lists
 # ============================================================================
 
-
-
 NAME_LIST = [
-    'despot', 'despot_iso', 'despot_ds',
+    'despot_hiqbind', 'despot_iso_hiqbind', 'despot_ds_hiqbind',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina',
@@ -68,8 +66,8 @@ SCORE_CATEGORY = {
 # ERC configuration
 # ============================================================================
 
-ERC_PARTNERS = ['despot_ds', 'dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
-
+#ERC_PARTNERS = ['dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
+ERC_PARTNERS = []
 ERC_CONFIG = {
     'base': 'despot',
     'partners': ERC_PARTNERS,
@@ -84,7 +82,7 @@ ERC_NAMES_CLEAN = [
     for p in ERC_PARTNERS
 ]
 
-Z_PARTNERS = ['despot_ds', 'dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
+Z_PARTNERS = []
 
 Z_CONFIG = {
     'base': 'despot',
@@ -99,14 +97,15 @@ Z_NAMES_CLEAN = [
     for p in Z_PARTNERS
 ]
 
-
+DATABASE = 'HiQBind'
+#DATABASE = 'CROWN'
 
 if __name__ == '__main__':
 
     ### Step 1: run DESPOT on all CASF entries and store data ###
-    #run_scoring()
-    #run_docking()
-    #run_screening(n_jobs=8)
+    run_scoring(DATABASE)
+    run_docking(DATABASE)
+    run_screening(n_jobs=8, database = DATABASE)
 
     ### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
 
