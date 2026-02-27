@@ -1,9 +1,7 @@
 import pandas as pd
 import os
 from pathlib import Path
-import multiprocessing
-import time
-from joblib import Parallel, delayed
+from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 
 # Set some variables for running the scripts
 NUM_CORES = 96
@@ -23,35 +21,8 @@ from src.CROWN.structure_filter import filter_structures
 from src.CROWN.structure_fixer import ComplexFixer
 from src.CROWN.pli_filter import PLI_Filter
 from src.CROWN.system_fixer import split_system
-from src.CROWN.structure_refiner import refine_system
+from src.CROWN.structure_refiner_test import refine_system
 from src.config import DATA_DIR, SOURCE_DB_PATH
-
-def worker(func, args, result_queue):
-    """Run func(*args) and put result in queue."""
-    try:
-        result = func(*args)
-        result_queue.put(result)
-    except Exception as e:
-        result_queue.put(e)
-
-def run_with_timeout(func, args=(), timeout=600):
-    """Run func(*args) with a hard timeout. Kills subprocesses too."""
-    queue = multiprocessing.Queue()
-    proc = multiprocessing.Process(target=worker, args=(func, args, queue))
-    proc.start()
-    proc.join(timeout=timeout)
-
-    if proc.is_alive():
-        proc.kill()   # SIGKILL — kills C extensions, subprocesses, everything
-        proc.join()
-        return None    # or raise TimeoutError
-
-    if not queue.empty():
-        result = queue.get()
-        if isinstance(result, Exception):
-            raise result
-        return result
-    return None
 
 def main():
 	"""
@@ -70,8 +41,7 @@ def main():
 #	print('Step 1 done')
 
 	# Step 2: fix initial mmCIF structures
-	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
-#	complex_fixer = ComplexFixer(df)
+#	complex_fixer = ComplexFixer(initial_subset)
 #	complex_fixer.wrapper(NUM_CORES)
 #	print('Step 2 done')
 
@@ -81,27 +51,38 @@ def main():
 #	print('Step 3 done')
 
 	# Step 4: make fixed systems directory to work with later
-	os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
-	os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems', exist_ok = True)
+#	os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
 
-	Parallel(n_jobs = 1, verbose = 10)(delayed(split_system)(
-			pdb_path = Path(f'{DATA_DIR}/CROWN/raw_pdb/{row.basename}.pdb'),
-			sdf_dir = Path(f'{SOURCE_DB_PATH}/systems/{row.system_id}/ligand_files'),
-			out_dir = Path(f'{DATA_DIR}/CROWN/systems/{row.basename}')
-		) for row in df.itertuples())
+	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
+	basename_list = os.listdir(DATA_DIR / 'CROWN' / 'processed_systems')
+
+	subset = df[~df['basename'].isin(basename_list)].sample(frac = 1)
+	print(subset)
+
+#	Parallel(n_jobs = 1, verbose = 10)(delayed(split_system)(
+#			pdb_path = Path(f'{DATA_DIR}/CROWN/raw_pdb/{row.basename}.pdb'),
+#			sdf_dir = Path(f'{SOURCE_DB_PATH}/systems/{row.system_id}/ligand_files'),
+#			out_dir = Path(f'{DATA_DIR}/CROWN/systems/{row.basename}')
+#		) for row in df.itertuples())
 
 	# Step 5: Protonate and energy-minimize
-	basename_list = os.listdir(DATA_DIR / 'CROWN' / 'processed_systems')
-	subset = df[~df['basename'].isin(basename_list)].sample(frac = 1)
-	results = []
+	with ProcessPoolExecutor(max_workers=NUM_CORES) as executor:
+		futures = {
+			executor.submit(refine_system, row.basename): row.basename
+			for row in subset.itertuples()
+		}
 
-	for row in subset.itertuples():
-		print(row.basename)
-		result = run_with_timeout(refine_system, args = (row.basename,), timeout = 600)
-		if result is None:
-			print(f"Skipped {row.basename} (timed out or no result)")
-		else:
-			print(f"Got result for {row.basename}: {result}")
+		results = []
+
+		for future in as_completed(futures):
+			name = futures[future]
+			try:
+				result = future.result(timeout=REFINE_TIMEOUT)
+				results.append(result)
+			except TimeoutError:
+				print(f"[TIMEOUT] {name}")
+			except Exception as e:
+				print(f"[ERROR] {name}: {e}")
 
 	rmsd_df = pd.DataFrame(results, columns = ['dirname', 'rmsd_nonmobile', 'rmsd_pocket', 'rmsd_ligand']).dropna()
 	rmsd_df.to_csv('mobile_rmsd.csv', index = False)

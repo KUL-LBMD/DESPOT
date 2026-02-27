@@ -27,6 +27,8 @@ COMMON_ARTIFACTS = ['PEG', 'CRY', 'EDO', 'ACT', 'DMS', 'MES', 'GOL', 'EPE', 'BU1
 
 VALID_BOND_ATOMS = {'C', 'N', 'O', 'S', 'P', 'B'}
 
+WATER_NAMES = {"HOH", "WAT", "DOD", "H2O", "TIP3", "SPC", "TIP"}
+
 METALLOCOFACTORS = {'HEM', 'SF4', 'MGD'}
 
 FIXED_RESIDUES = STANDARD_AA | METALLOCOFACTORS | {'LIG', 'HOH', 'WAT', 'TIP3', 'SOL', 'OPC', 'ACE', 'NME'}
@@ -532,6 +534,9 @@ class OverlapResolver:
                 res2_name = res2.get_resname()
                 res2_id = res2.get_id()[1]
                 chain2_id = res2.get_full_id()[2]
+
+                if res1_name in WATER_NAMES or res2_name in WATER_NAMES:
+                    continue
 
                 if chain1_id != chain2_id:
                     # Create sorted pair key (interactions are symmetric)

@@ -295,7 +295,7 @@ class DESPOT_Scorer:
 
         self.database = database
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'atom_type_counts_{database.lower()}.csv')
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts_{database.lower()}.csv')
         colname1, colname2 = 'total_occurrence', 'total_occurrence'
 
         self.types_list_1d = counts_df.loc[
@@ -507,7 +507,7 @@ class DESPOT_Isotropic_Scorer:
 
         self.database = database
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'atom_type_counts_{database.lower()}.csv')
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts_{database.lower()}.csv')
         colname1, colname2 = 'total_occurrence', 'total_occurrence'
 
         if mode == 'mif':

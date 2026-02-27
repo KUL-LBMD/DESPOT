@@ -1,6 +1,6 @@
 """
 split_system.py
-~~~~~~~~~~~
+~~~~~~~~~~
 Read individual SDF files from a directory, merge them, match against a
 reference PDB, restore missing bonds by proximity, split into connected
 components, classify each by PDB residue name, and write:
@@ -39,6 +39,16 @@ METAL_ELEMENTS: set[str] = {
 METAL_ELEMENTS |= {x.upper() for x in METAL_ELEMENTS} # Add uppercase variants for better detection
 
 METALLOCOFACTOR_LIST = ['HEM', 'SF4', 'MGD']
+
+# Elements that indicate organic character in a metal-containing ligand
+ORGANIC_ELEMENTS: set[str] = {"C", "N", "O", "S", "P"}
+
+# Standard amino-acid 3-letter codes + common non-informative residue names
+STANDARD_AA_AND_PLACEHOLDER: set[str] = {
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+    "LIG", "UNK", "UNL", "ACE", "NME"
+}
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -124,13 +134,39 @@ class Molecule:
         self, ref_coords: NDArray[np.float64], tol: float
     ) -> Molecule:
         """Return a new Molecule containing only atoms within *tol* of
-        any point in *ref_coords*."""
-        kept: list[int] = []
-        for i, atom in enumerate(self.atoms):
-            dists = np.linalg.norm(ref_coords - atom.coord, axis=1)
-            if dists.min() < tol:
-                kept.append(i)
+        any point in *ref_coords*.  Each reference coordinate can only
+        be claimed by a single SDF atom (closest wins) to prevent
+        duplicate incorporation from overlapping input SDF files."""
+        if len(ref_coords) == 0 or self.n_atoms == 0:
+            return self._subset([])
 
+        mol_coords = self.coord_matrix  # (M, 3)
+        # Full pairwise distance matrix: (M_sdf, N_pdb)
+        dists = np.linalg.norm(
+            mol_coords[:, None, :] - ref_coords[None, :, :], axis=2
+        )
+
+        claimed_ref: set[int] = set()     # PDB indices already taken
+        kept: list[int] = []
+
+        # For each SDF atom, find its nearest PDB atom; collect all
+        # candidates, then greedily assign closest-first.
+        candidates: list[tuple[float, int, int]] = []  # (dist, sdf_idx, pdb_idx)
+        for i in range(len(mol_coords)):
+            j = int(dists[i].argmin())
+            d = dists[i, j]
+            if d < tol:
+                candidates.append((d, i, j))
+
+        # Sort by distance so the closest match wins each PDB atom
+        candidates.sort()
+        for d, sdf_idx, pdb_idx in candidates:
+            if pdb_idx in claimed_ref:
+                continue
+            claimed_ref.add(pdb_idx)
+            kept.append(sdf_idx)
+
+        kept.sort()  # preserve original atom ordering
         return self._subset(kept)
 
     def add_proximity_bonds(self, cutoff: float, default_rest: str) -> int:
@@ -400,13 +436,52 @@ def write_sdf(molecules: list[Molecule], path: Path) -> None:
     log.info("Wrote %d entries → %s", len(molecules), path)
 
 
+def _find_single_heavy_atom_residues(
+    pdb_lines: list[str],
+) -> set[tuple[str, str, str, str]]:
+    """Identify residues that have only 1 heavy atom AND whose name is a
+    standard amino acid or a placeholder (LIG / UNK / UNL).
+
+    Returns a set of (chain, resname, resseq) tuples to exclude.
+    """
+    heavy_counts: dict[tuple[str, str, str], int] = defaultdict(int)
+
+    for line in pdb_lines:
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        element = line[76:78].strip()
+        if not element:
+            element = line[12:16].strip().lstrip("0123456789")[0]
+        if element == "H":
+            continue
+        resname = line[17:20].strip()
+        chain = line[21:22]
+        resseq = line[22:26].strip()
+        heavy_counts[(chain, resname, resseq)] += 1
+
+    to_remove: set[tuple[str, str, str]] = set()
+    for key, count in heavy_counts.items():
+        if count == 1 and key[1] in STANDARD_AA_AND_PLACEHOLDER:
+            to_remove.add(key)
+
+    if to_remove:
+        log.info("Removing %d single-heavy-atom residue(s) from receptor PDB: %s",
+                 len(to_remove),
+                 [(k[1], k[2]) for k in sorted(to_remove)])
+    return to_remove
+
+
 def write_receptor_pdb(
     pdb_lines: list[str],
     ligand_coords: NDArray[np.float64],
     path: Path,
     tol: float = 0.05,
 ) -> None:
-    """Write a PDB containing only lines whose coords are NOT in any ligand."""
+    """Write a PDB containing only lines whose coords are NOT in any ligand,
+    and excluding single-heavy-atom residues with standard AA / placeholder
+    names."""
+
+    single_atom_residues = _find_single_heavy_atom_residues(pdb_lines)
 
     kept = 0
     prev_line = None
@@ -424,6 +499,13 @@ def write_receptor_pdb(
                 dists = np.linalg.norm(ligand_coords - coord, axis=1)
                 if dists.size != 0 and dists.min() < tol:
                     continue  # this atom belongs to a ligand – skip
+
+                # Skip single-heavy-atom residues with AA/placeholder names
+                resname = line[17:20].strip()
+                chain = line[21:22]
+                resseq = line[22:26].strip()
+                if (chain, resname, resseq) in single_atom_residues:
+                    continue
 
                 atom_line = line
 
@@ -556,6 +638,7 @@ def split_system(
     cfg: PipelineConfig = PipelineConfig(),
     ligand_resname: str = "LIG",
 ) -> list[Molecule]:
+
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # --- load & merge ---
@@ -602,6 +685,16 @@ def split_system(
 
         if any(r in METALLOCOFACTOR_LIST for r in resnames):
             continue
+
+        # Skip organometallic ligands not in METALLOCOFACTOR_LIST:
+        # if original component has metals AND at least one organic atom
+        has_metal = any(a.is_metal for a in comp.atoms)
+        has_organic = any(a.element in ORGANIC_ELEMENTS for a in comp.atoms)
+        if has_metal and has_organic:
+            log.info("  Skipping organometallic component (%d atoms, resnames=%s) "
+                     "– not in METALLOCOFACTOR_LIST", comp.n_atoms, resnames)
+            shutil.rmtree(out_dir)
+            return
 
         non_metal_components.append(comp_no_metals)
 
