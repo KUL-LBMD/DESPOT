@@ -291,7 +291,7 @@ class DESPOT_Scorer:
     Subsequent calls will be much faster.
     """
 
-    def __init__(self, database):
+    def __init__(self, mode = 'gaussian', database = 'CROWN'):
 
         self.database = database
 
@@ -329,7 +329,11 @@ class DESPOT_Scorer:
         self.types_set_3d = set(self.types_list_3d)
 
         # Load scores as contiguous float32 arrays
-        loaded = np.load(DATA_DIR / 'potentials' / f'despot_scores_{self.database.lower()}.npz')
+        if mode == 'gaussian':
+            loaded = np.load(DATA_DIR / 'potentials' / f'despot_scores_{self.database.lower()}.npz')
+        else:
+            loaded = np.load(DATA_DIR / 'potentials' / f'despot_sh_scores_{self.database.lower()}.npz')
+
         self.scores_1d = np.ascontiguousarray(loaded['scores_1d'].astype(np.float32))
         self.scores_2d = np.ascontiguousarray(loaded['scores_2d'].astype(np.float32))
         self.scores_3d = np.ascontiguousarray(loaded['scores_3d'].astype(np.float32))

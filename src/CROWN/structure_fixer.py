@@ -63,7 +63,7 @@ def is_nonstandard_residue(residue, chain_residues):
 	"""
 
 	elements = {atom.element.symbol for atom in residue.atoms()}
-	if {'C', 'N', 'O'}.issubset(elements):
+	if {'C', 'N'}.issubset(elements) or {'C', 'O'}.issubset(elements):
 		# Must be flanked by standard residues
 		res_list = chain_residues[residue.chain.index]
 		local_idx = next(i for i, r in enumerate(res_list) if r == residue)
@@ -901,6 +901,7 @@ class ComplexFixer:
 
                 if bonds_to_add:
                     flags['has_missing_bonds'] = True
+                    print(f'Missing bond in {basename}')
                 if overlaps_to_resolve:
                     flags['has_steric_overlaps'] = True
 
@@ -937,8 +938,8 @@ class ComplexFixer:
                     flags['failure_reason'] = 'missing_atoms_in_shell'
                 elif fixer_status is None:
                     flags['failure_reason'] = 'null_elements_in_topology'
-                elif fixer_status == 'ok':
-                    print(f'Output file written to {basename}.pdb')
+                #elif fixer_status == 'ok':
+                    #print(f'Output file written to {basename}.pdb')
 
         except Exception as e:
             flags['failure_reason'] = f'exception: {type(e).__name__}: {e}'

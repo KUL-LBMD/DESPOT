@@ -23,14 +23,14 @@ import os
 # ============================================================================
 
 NAME_LIST = [
-    'despot_hiqbind', 'despot_iso_hiqbind', 'despot_ds_hiqbind',
+    'despot_hiqbind', 'despot_iso_hiqbind', 'despot_sh_hiqbind', 'despot_ds_hiqbind',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'DESPOT-Iso', 'DESPOT-DS',
+    'DESPOT', 'DESPOT-Iso', 'DESPOT-SH', 'DESPOT-DS',
     'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
     'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20',

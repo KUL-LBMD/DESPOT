@@ -6,7 +6,7 @@ import time
 from joblib import Parallel, delayed
 
 # Set some variables for running the scripts
-NUM_CORES = 96
+NUM_CORES = 8
 MAXDEV_THRESHOLD = 0.1
 MAX_COUNT = 500
 REFINE_TIMEOUT = 600  # 10 minutes per complex
@@ -26,32 +26,32 @@ from src.CROWN.system_fixer import split_system
 from src.CROWN.structure_refiner import refine_system
 from src.config import DATA_DIR, SOURCE_DB_PATH
 
-def worker(func, args, result_queue):
-    """Run func(*args) and put result in queue."""
-    try:
-        result = func(*args)
-        result_queue.put(result)
-    except Exception as e:
-        result_queue.put(e)
+class _RefinementTimeout(Exception):
+	pass
 
-def run_with_timeout(func, args=(), timeout=600):
-    """Run func(*args) with a hard timeout. Kills subprocesses too."""
-    queue = multiprocessing.Queue()
-    proc = multiprocessing.Process(target=worker, args=(func, args, queue))
-    proc.start()
-    proc.join(timeout=timeout)
+def _timeout_handler(signum, frame):
+	raise _RefinementTimeout()
 
-    if proc.is_alive():
-        proc.kill()   # SIGKILL — kills C extensions, subprocesses, everything
-        proc.join()
-        return None    # or raise TimeoutError
-
-    if not queue.empty():
-        result = queue.get()
-        if isinstance(result, Exception):
-            raise result
-        return result
-    return None
+def refine_with_timeout(basename, timeout=REFINE_TIMEOUT):
+	"""
+	Run refine_system with a hard time limit using SIGALRM.
+	Works inside joblib/loky workers on Linux because each
+	worker executes tasks in its main thread.
+	"""
+	old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+	signal.alarm(timeout)
+	try:
+		result = refine_system(basename)
+		signal.alarm(0)
+		return result
+	except _RefinementTimeout:
+		print(f"[TIMEOUT] {basename} exceeded {timeout}s — skipping.")
+		return None
+	except Exception:
+		signal.alarm(0)
+		raise
+	finally:
+		signal.signal(signal.SIGALRM, old_handler)
 
 def main():
 	"""
@@ -66,21 +66,23 @@ def main():
 	"""
 
 	# Step 1: Dataframe subset from original PLInder parquet file
-#	initial_subset = filter_structures()
-#	print('Step 1 done')
+	#initial_subset = filter_structures()
+	#print('Step 1 done')
+
+	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'new_lines.csv')
 
 	# Step 2: fix initial mmCIF structures
-	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
-#	complex_fixer = ComplexFixer(df)
-#	complex_fixer.wrapper(NUM_CORES)
-#	print('Step 2 done')
+	complex_fixer = ComplexFixer(df)
+	complex_fixer.wrapper(8)
+	print('Step 2 done')
 
 	# Step 3: PLI filter
-#	pli_filter = PLI_Filter(initial_subset)
-#	pli_filter.wrapper(MAXDEV_THRESHOLD, MAX_COUNT)
-#	print('Step 3 done')
+	pli_filter = PLI_Filter(df)
+	pli_filter.wrapper(MAXDEV_THRESHOLD, MAX_COUNT)
+	print('Step 3 done')
 
 	# Step 4: make fixed systems directory to work with later
+	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
 	os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
 	os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems', exist_ok = True)
 
@@ -93,17 +95,10 @@ def main():
 	# Step 5: Protonate and energy-minimize
 	basename_list = os.listdir(DATA_DIR / 'CROWN' / 'processed_systems')
 	subset = df[~df['basename'].isin(basename_list)].sample(frac = 1)
-	results = []
 
-	for row in subset.itertuples():
-		print(row.basename)
-		result = run_with_timeout(refine_system, args = (row.basename,), timeout = 600)
-		if result is None:
-			print(f"Skipped {row.basename} (timed out or no result)")
-		else:
-			print(f"Got result for {row.basename}: {result}")
+	tuple_list = Parallel(n_jobs = 8, verbose = 10)(delayed(refine_with_timeout)(row.basename) for row in subset.itertuples())
 
-	rmsd_df = pd.DataFrame(results, columns = ['dirname', 'rmsd_nonmobile', 'rmsd_pocket', 'rmsd_ligand']).dropna()
+	rmsd_df = pd.DataFrame(tuple_list, columns = ['dirname', 'rmsd_nonmobile', 'rmsd_pocket', 'rmsd_ligand']).dropna()
 	rmsd_df.to_csv('mobile_rmsd.csv', index = False)
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ from src.CROWN.structure_filter import filter_structures
 from src.CROWN.structure_fixer import ComplexFixer
 from src.CROWN.pli_filter import PLI_Filter
 from src.CROWN.system_fixer import split_system
-from src.CROWN.structure_refiner_test import refine_system
+from src.CROWN.structure_refiner import refine_system
 from src.config import DATA_DIR, SOURCE_DB_PATH
 
 class _RefinementTimeout(Exception):
@@ -81,11 +81,7 @@ def main():
 	# Step 4: make fixed systems directory to work with later
 #	os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
 
-	df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'pli_filter_pass.csv')
-	basename_list = os.listdir(DATA_DIR / 'CROWN' / 'processed_systems')
-
-	subset = df[~df['basename'].isin(basename_list)].sample(frac = 1)
-	print(subset)
+	subset = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'crown_final.csv')
 
 #	Parallel(n_jobs = 1, verbose = 10)(delayed(split_system)(
 #			pdb_path = Path(f'{DATA_DIR}/CROWN/raw_pdb/{row.basename}.pdb'),

@@ -33,13 +33,14 @@ def filter_structures():
 		& (df['ligand_num_unresolved_heavy_atoms'] == 0)
 		& (df['entry_determination_method'] == 'X-RAY DIFFRACTION')
 		& (df['entry_resolution'] <= 3.0)
-		& (df['system_ligand_validation_average_rsr'] < 0.3)
-		& (df['system_ligand_validation_average_rscc'] > 0.8)
+		& (df['system_ligand_validation_average_rsr'] <= 0.3)
+		& (df['system_ligand_validation_average_rscc'] >= 0.8)
 		& (df['system_id'].isin(dir_list))
 		]
 
 	columns_to_select = ['basename', 'system_id', 'ligand_instance_chain', 'entry_resolution', 'system_ligand_validation_average_rsr', 'system_ligand_validation_average_rscc',
-		'system_pocket_UniProt', 'system_pocket_CATH', 'ligand_unique_ccd_code', 'ligand_rdkit_canonical_smiles']
+		'system_pocket_UniProt', 'system_pocket_CATH', 'ligand_unique_ccd_code', 'ligand_rdkit_canonical_smiles', 'ligand_num_unresolved_heavy_atoms', 'ligand_is_covalent', 'ligand_is_artifact', 'ligand_is_ion', 'ligand_num_rot_bonds', 
+		'ligand_num_hbd', 'ligand_num_hba', 'ligand_num_heavy_atoms']
 	filtered_subset = subset[columns_to_select].copy()
 
 	# Save metadata

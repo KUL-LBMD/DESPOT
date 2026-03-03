@@ -31,7 +31,7 @@ MOBILE_RADIUS = 0.6  # Distance in nm (6 Å = 0.6 nm)
 FIX_STRENGTH = 1000000.0  # kJ/mol/nm² - very high to effectively freeze atoms
 TETHER_STRENGTH = 10 # kcal/(mol*A^2). Default parameter in MOE
 TETHER_FLATBOTTOM = 0.25 # Within 0.25 A radius, atoms feel no tethering force
-MINIMIZATION_STEPS = 1
+MINIMIZATION_STEPS = 5000
 ENERGY_REPORT_INTERVAL = 50
 TEMPERATURE = 300  # Kelvin
 TIMESTEP = 0.002  # picoseconds
@@ -72,15 +72,33 @@ def clean_ff(ff):
 def rename_single_atom_residues(pdb_path):
     pdb = PDBFile(pdb_path)
     modified = False
-    for residue in pdb.topology.residues():
+
+    modeller = Modeller(pdb.topology, pdb.positions)
+
+    for residue in modeller.topology.residues():
         if residue.name in ('LIG', 'UNK', 'UNL'):
             atoms = list(residue.atoms())
             if len(atoms) == 1:
-                residue.name = atoms[0].name.strip().upper()
+                if atoms[0].element == 'O':
+                    residue.name = 'HOH'
+                else:
+                    residue.name = atoms[0].name.strip().upper()
                 modified = True
+
+    atoms_to_remove = []
+    for atom in modeller.topology.atoms():
+        if atom.element.symbol in {'H', 'D'}:
+            atoms_to_remove.append(atom)
+        elif atom.residue.name == 'UNK':
+            atoms_to_remove.append(atom)
+
+    if atoms_to_remove:
+        modeller.delete(atoms_to_remove)
+        modified = True
+
     if modified:
         with open(pdb_path, 'w') as f:
-            PDBFile.writeFile(pdb.topology, pdb.positions, f)
+            PDBFile.writeFile(modeller.topology, modeller.positions, f)
 
 def assign_charges_with_fallback(molecule: Molecule) -> Molecule:
     """
@@ -100,10 +118,6 @@ def assign_charges_with_fallback(molecule: Molecule) -> Molecule:
     openff.toolkit.Molecule
         The same molecule with partial_charges populated.
     """
-    # Skip if charges already assigned (e.g. from SDF PartialCharge property)
-    if molecule.partial_charges is not None:
-        logger.info(f"Molecule '{molecule.name}' already has partial charges, skipping.")
-        return molecule
 
     # --- Attempt 1: standard am1bcc via AmberTools (sqm) ---
     try:
@@ -137,7 +151,12 @@ def assign_charges_with_fallback(molecule: Molecule) -> Molecule:
         return molecule
 
     except Exception as e:
-        logger.error(f"NAGL charge assignment also failed for '{molecule.name}': {e}")
+        logger.warning(f"NAGL charge assignment also failed for '{molecule.name}': {e}")
+
+    try:
+        molecule.assign_partial_charges('gasteiger')
+        return molecule
+    except Exception as e:
         raise
 
 def calc_rmsd(pos_ref, pos_target, atom_indices):
@@ -182,51 +201,65 @@ def find_cofactors(pdb_path):
 
 def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 	"""Protonate a ligand SDF file at the given pH."""
-	mol = Chem.SDMolSupplier(sdf_path, removeHs=True)[0]
-	if mol is None:
-		# Try out alternate ways of loading molecule
-		with tempfile.TemporaryDirectory() as tmp_dir:
+	with tempfile.TemporaryDirectory() as tmp_dir:
+		mol = Chem.SDMolSupplier(sdf_path, removeHs=True)[0]
+		if mol is not None:
+			frags = rdmolops.GetMolFrags(mol)
+			if len(frags) > 1:
+				subprocess.run(['obabel', '-isdf', sdf_path, '-oxyz', '-O', f'{tmp_dir}/temp.xyz'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+				subprocess.run(['obabel', '-ixyz', f'{tmp_dir}/temp.xyz', '-osdf', '-O', f'{tmp_dir}/temp.sdf'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+				mol = Chem.SDMolSupplier(f'{tmp_dir}/temp.sdf', removeHs=True)[0]
+
+		if mol is None:
+			# Try out alternate ways of loading molecule
+			subprocess.run(['obabel', '-isdf', sdf_path, '-opdb', '-O', f'{tmp_dir}/temp.pdb'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+			mol = Chem.MolFromPDBFile(f'{tmp_dir}/temp.pdb', removeHs=False, sanitize=False)
 			if mol is None:
-				subprocess.run(['obabel', '-isdf', sdf_path, '-opdb', '-O', f'{tmp_dir}/temp.pdb'], stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-				mol = Chem.MolFromPDBFile(f'{tmp_dir}/temp.pdb', removeHs=False, sanitize=False)
-				if mol is None:
-					return
+				return
 
-				# FIX OXYGEN FORMAL CHARGES, used to be problem in NAD+ that was deprotonated.
-				for atom in mol.GetAtoms():
-					if atom.GetAtomicNum() != 8:         # skip non-O
-						continue
-					# count DOUBLE bonds; Double-bonded O should have formal charge = 0
-					n_double = sum(1 for b in atom.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE)
-					if n_double:
-						atom.SetFormalCharge(0)
-						continue
+			# FIX OXYGEN FORMAL CHARGES, used to be problem in NAD+ that was deprotonated.
+			for atom in mol.GetAtoms():
+				if atom.GetAtomicNum() != 8:         # skip non-O
+					continue
+				# count DOUBLE bonds; Double-bonded O should have formal charge = 0
+				n_double = sum(1 for b in atom.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE)
+				if n_double:
+					atom.SetFormalCharge(0)
+					continue
 
-					# Single-bonded O attached to C should have formal charge = -1
-					num_neighbors = atom.GetDegree()
-					if num_neighbors == 1:
-						neighbor = atom.GetNeighbors()[0]
-						bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
-						if (neighbor.GetAtomicNum() in (6, 15, 16) and bond.GetBondType() == Chem.BondType.SINGLE and atom.GetFormalCharge() == 0):
-							atom.SetFormalCharge(-1)
+				# Single-bonded O attached to C should have formal charge = -1
+				num_neighbors = atom.GetDegree()
+				if num_neighbors == 1:
+					neighbor = atom.GetNeighbors()[0]
+					bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
+					if (neighbor.GetAtomicNum() in (6, 15, 16) and bond.GetBondType() == Chem.BondType.SINGLE and atom.GetFormalCharge() == 0):
+						atom.SetFormalCharge(-1)
 
-				formal_charge = Chem.GetFormalCharge(mol)
+			formal_charge = Chem.GetFormalCharge(mol)
 
-				for charge in [formal_charge] + [formal_charge + d for d in (1, -1, 2, -2, 3, -3)]:
-					try:
-						rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
-						break
-					except ValueError:
-						continue
+			for charge in [formal_charge] + [formal_charge + d for d in (1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8)]:
+				try:
+					rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
+					break
+				except ValueError:
+					continue
 
 	# Check if molecule is fully connected
 	frags = rdmolops.GetMolFrags(mol)
 	if len(frags) > 1:
-		rdDetermineBonds.DetermineBonds(mol)
+		formal_charge = Chem.GetFormalCharge(mol)
+		for charge in [formal_charge] + [formal_charge + d for d in (1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8)]:
+			try:
+				rdDetermineBonds.DetermineBonds(mol, charge=formal_charge, covFactor=1.15, useVdw=True) #covFactor was set to 1.15 as BCP would throw errors due to carbons being too close.
+				break
+			except ValueError:
+				continue
+
 		# Check if it's now connected
 		new_frags = rdmolops.GetMolFrags(mol)
 		if len(new_frags) > 1:
 			logger.info(f"  Warning: still {len(new_frags)} fragments after bond determination.")
+			return
 		else:
 			logger.info(f"  Successfully connected into a single molecule.")
 
@@ -254,6 +287,8 @@ def protonate_ligand(sdf_path: str, out_sdf: str, ph: float = 7.4):
 
 def add_bonds(topology, positions, resname_set):
     """Add missing bonds for residues based on interatomic distances."""
+    metal_set = {'Fe', 'Mn', 'Mg', 'Ni', 'Zn', 'Cu'}
+
     for residue in topology.residues():
         for resname in resname_set:
             if residue.name != resname:
@@ -285,19 +320,19 @@ def add_bonds(topology, positions, resname_set):
                     if ei == 'H' and ej == 'H':
                         continue
 
-                    if ei == 'H' or ej == 'H':
-                        if dist < 0.12:
-                            topology.addBond(atoms[i], atoms[j])
+                    elif ei == 'H' or ej == 'H':
+                        if not ei in metal_set and not ej in metal_set:
+                            if dist < 0.12:
+                                topology.addBond(atoms[i], atoms[j])
 
                     # Fe-N bonds are ~2.0 Å
-                    metal_set = {'Fe', 'Mn', 'Mg', 'Ni', 'Zn', 'Cu'}
-                    if ei in metal_set or ej in metal_set:
-                        if dist < 0.25:  # 2.5 Å in nm
+                    elif ei in metal_set or ej in metal_set:
+                        if dist < 0.27:  # 2.7 Å in nm
                             topology.addBond(atoms[i], atoms[j])
+
                     # C-C, C-N, C-O bonds are ~1.2-1.55 Å
-                    else:
-                        if dist < 0.18 and not 'H' in (ei, ej):  # 1.8 Å in nm
-                            topology.addBond(atoms[i], atoms[j])
+                    elif dist < 0.18:
+                        topology.addBond(atoms[i], atoms[j])
 
 def add_seqres_with_caps(input_pdb: str, output_pdb: str):
 	"""
@@ -405,16 +440,16 @@ def refine_system(input_dir):
 
 			# First check for weird cofactors
 			pdb_path = f'{DATA_DIR}/CROWN/systems/{input_dir}/receptor_fixed.pdb'
-			rename_single_atom_residues(pdb_path)  # fix single-atom LIG/UNK/UNL residues
+			pdb_length = get_file_length(pdb_path)
 
 			forcefield_list = ['amber19/protein.ff19SB.xml', 'amber19/DNA.OL21.xml', 'amber19/opc3.xml',
 				f'{DATA_DIR}/CROWN/custom_xml/forcefield/HEM.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/MGD.xml', f'{DATA_DIR}/CROWN/custom_xml/forcefield/SF4.xml']
 
-			pdb_length = get_file_length(pdb_path)
 			if pdb_length > 10:
 
+				rename_single_atom_residues(pdb_path)  # fix single-atom LIG/UNK/UNL residues
 				special_residues = find_cofactors(pdb_path)
-				modeller = prepare_amber(special_residues)
+				modeller = prepare_amber(pdb_path, special_residues)
 
 			else:
 				modeller = Modeller(Topology(), [] * unit.nanometers)
@@ -548,6 +583,24 @@ def refine_system(input_dir):
 			platform = Platform.getPlatformByName('CPU')
 			properties = {'Threads': '1'}
 
+			# Save original coordinates before energy minimization
+			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
+			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_protonated.pdb'
+			mol2_path = pdb_path.replace('.pdb', '.mol2')
+			with open(pdb_path, 'w') as f:
+				PDBFile.writeFile(modeller.topology, modeller.positions, f)
+			subprocess.run(['obabel', '-ipdb', pdb_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+			# Save each ligand as a separate mol2 with minimized coordinates
+			for basename, ligand_mol, atom_indices in ligand_entries:
+
+				sdf_path = f'{tmp_dir}/{basename}_protonated.sdf'
+				mol2_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/{basename}_protonated.mol2'
+
+				ligand_mol.to_file(sdf_path, file_format='SDF')
+				subprocess.run(['obabel', '-isdf', sdf_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 			simulation = Simulation(modeller.topology, system, integrator, platform, properties)
 			simulation.context.setPositions(modeller.positions)
 
@@ -579,7 +632,7 @@ def refine_system(input_dir):
 			# Save minimized structure as PDB (protein/water only, no ligands)
 			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
 			pdb_modeller = Modeller(modeller.topology, minimized_positions)
-			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_test.pdb'
+			pdb_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/system_minimized.pdb'
 			mol2_path = pdb_path.replace('.pdb', '.mol2')
 			with open(pdb_path, 'w') as f:
 				PDBFile.writeFile(pdb_modeller.topology, pdb_modeller.positions, f)
@@ -590,8 +643,8 @@ def refine_system(input_dir):
 				minimized_coords = np.array([minimized_positions[i].value_in_unit(unit.angstrom) for i in atom_indices]) * openff_unit.angstrom
 				ligand_mol.conformers[0] = minimized_coords
 
-				sdf_path = f'{tmp_dir}/{basename}_test.sdf'
-				mol2_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/{basename}_test.mol2'
+				sdf_path = f'{tmp_dir}/{basename}_minimized.sdf'
+				mol2_path = f'{DATA_DIR}/CROWN/processed_systems/{input_dir}/{basename}_minimized.mol2'
 
 				ligand_mol.to_file(sdf_path, file_format='SDF')
 				subprocess.run(['obabel', '-isdf', sdf_path, '-omol2', '-O', mol2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

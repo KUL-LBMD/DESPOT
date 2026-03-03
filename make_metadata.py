@@ -13,6 +13,7 @@ def safe_murcko(smi):
 		return None
 
 df = pd.read_parquet(SOURCE_DB_PATH / 'index' / 'annotation_table.parquet')
+print(len(df))
 df['basename'] = df['system_id'].str.lower() + '_' + df['ligand_instance_chain'].str.lower()
 df = df.drop_duplicates(subset = ['entry_pdb_id', 'ligand_unique_ccd_code'])
 
