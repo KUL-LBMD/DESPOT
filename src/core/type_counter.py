@@ -21,7 +21,7 @@ def _convert_file(filename, database):
 
     return filename, prot_df, lig_df
 
-def count_atom_types(database: str) -> pd.DataFrame:
+def count_atom_types_parallel(database: str) -> pd.DataFrame:
     """
     Count total occurrences of each atom type across all structures in a database,
     separately for protein (receptor) and ligand files.
@@ -101,6 +101,64 @@ def count_atom_types(database: str) -> pd.DataFrame:
 
     return counts_df
 
+def count_atom_types(database: str) -> pd.DataFrame:
+    """
+    Count total occurrences of each atom type across all structures in a database,
+    separately for protein (receptor) and ligand files.
+
+    Parameters
+    ----------
+    database : str
+        Name of the database subfolder under DATA_DIR.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: atom_type, protein_count, ligand_count, total_occurrence,
+                 local_reference_frame (from the MolConverter output if available).
+    """
+
+    protein_counts: Counter = Counter()
+    ligand_counts: Counter = Counter()
+    file_list = os.listdir(DATA_DIR / database / 'processed_mol2' / 'receptor')
+    num_files = len(file_list)
+
+    for i, file in enumerate(file_list):
+        print(file)
+        filename, prot_df, lig_df = _convert_file(file, database)
+
+        if prot_df is not None:
+            for atype in prot_df["atom_type"].dropna():
+                protein_counts[atype] += 1
+
+        if lig_df is not None:
+            for atype in lig_df["atom_type"].dropna():
+                ligand_counts[atype] += 1
+
+        print(i)
+
+    # Build results DataFrame
+    all_types = sorted(set(protein_counts.keys()) | set(ligand_counts.keys()))
+
+    records = []
+    for atype in all_types:
+        p_count = protein_counts.get(atype, 0)
+        l_count = ligand_counts.get(atype, 0)
+        records.append(
+            {
+                "atom_type": atype,
+                "protein_count": p_count,
+                "ligand_count": l_count,
+                "total_occurrence": p_count + l_count,
+            }
+        )
+
+    counts_df = pd.DataFrame(records).sort_values(
+        "total_occurrence", ascending=False
+    ).reset_index(drop=True)
+
+    return counts_df
+
 
 if __name__ == "__main__":
     import argparse
@@ -111,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument("database", type=str, help="Database name (subfolder of DATA_DIR)")
     args = parser.parse_args()
 
-    counts_df = count_atom_types(args.database)
+    counts_df = count_atom_types_parallel(args.database)
 
     output_path = str(DATA_DIR / "metadata" / f"atom_type_counts_{args.database.lower()}.csv")
     counts_df.to_csv(output_path, index=False)

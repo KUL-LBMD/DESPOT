@@ -23,14 +23,16 @@ import os
 # ============================================================================
 
 NAME_LIST = [
-    'despot_hiqbind', 'despot_iso_hiqbind', 'despot_sh_hiqbind', 'despot_ds_hiqbind',
+    'despot_crown_min', 'despot_iso_crown_min', 'despot_sh_crown_min', 'despot_crown', 'despot_iso_crown', 'despot_hiqbind', 'despot_iso_hiqbind', 'despot_sh_hiqbind',
+    'despot_crown_moe', 'despot_iso_crown_moe', 'despot_sh_crown_moe',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'DESPOT-Iso', 'DESPOT-SH', 'DESPOT-DS',
+    'DESPOT-CROWN_min', 'DESPOT-Iso-CROWN_min', 'DESPOT-SH-CROWN_min', 'DESPOT-CROWN', 'DESPOT-Iso-CROWN', 'DESPOT-HiQBind', 'DESPOT-Iso-HiQBind', 'DESPOT-SH-HiQBind',
+    'DESPOT-CROWN_MOE', 'DESPOT-Iso-CROWN_MOE', 'DESPOT-SH-CROWN_MOE',
     'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
     'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20',
@@ -98,7 +100,7 @@ Z_NAMES_CLEAN = [
 ]
 
 DATABASE = 'HiQBind'
-#DATABASE = 'CROWN'
+#DATABASE = 'CROWN_min'
 
 if __name__ == '__main__':
 

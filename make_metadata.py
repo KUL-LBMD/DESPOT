@@ -17,23 +17,31 @@ print(len(df))
 df['basename'] = df['system_id'].str.lower() + '_' + df['ligand_instance_chain'].str.lower()
 df = df.drop_duplicates(subset = ['entry_pdb_id', 'ligand_unique_ccd_code'])
 
+# CROWN
+crown_list = os.listdir(DATA_DIR / 'CROWN' / 'processed_systems')
+crown_df = df[df['basename'].isin(crown_list)]
+crown_df = crown_df.drop_duplicates(subset = ['entry_pdb_id', 'ligand_unique_ccd_code'])
+
 # PDB to taxonomy
 tax_df = pd.read_csv('/media/drives/drive3/robin/EmbContext/mapping/pdb_chain_taxonomy.tsv', sep = '\t')
 tax_df = tax_df.drop_duplicates(subset = ['PDB'], keep = 'first')
-print(df)
 df = df.merge(tax_df, left_on = ['entry_pdb_id'], right_on = ['PDB'], how = 'inner')
-print(df)
+crown_df = crown_df.merge(tax_df, left_on = ['entry_pdb_id'], right_on = ['PDB'], how = 'inner')
 
 # Bemis-Murcko mapping
 df['murcko_scaffold'] = df['ligand_rdkit_canonical_smiles'].apply(safe_murcko)
+crown_df['murcko_scaffold'] = crown_df['ligand_rdkit_canonical_smiles'].apply(safe_murcko)
 
 columns_to_select = ['basename', 'entry_pdb_id', 'system_id', 'ligand_instance_chain', 'entry_resolution', 'system_ligand_validation_average_rsr', 'system_ligand_validation_average_rscc',
 	'system_pocket_UniProt', 'system_pocket_CATH', 'ligand_unique_ccd_code', 'ligand_rdkit_canonical_smiles', 'entry_determination_method', 'ligand_num_unresolved_heavy_atoms', 'ligand_is_covalent', 'ligand_is_artifact', 'ligand_is_ion',
-	'TAX_ID', 'ligand_num_rot_bonds', 'ligand_num_hbd', 'ligand_num_hba', 'ligand_num_heavy_atoms', 'ligand_num_unresolved_heavy_atoms', 'murcko_scaffold']
+	'TAX_ID', 'ligand_num_rot_bonds', 'ligand_num_hbd', 'ligand_num_hba', 'ligand_num_heavy_atoms', 'murcko_scaffold']
 
 subset = df[columns_to_select]
+crown_subset = crown_df[columns_to_select]
 
 subset.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'plinder_full.csv', index = False, float_format = '%.3f')
+crown_subset.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'crown_full.csv', index = False, float_format = '%.3f')
+
 
 # HiQBind
 hiqbind_df = pd.read_csv('/media/drives/drive3/robin/HiQBind/figshare/hiqbind_metadata.csv')
@@ -44,10 +52,10 @@ merged = subset.merge(
     how='inner'
 )
 
-# Keep the row with highest RSR per (PDBID, Ligand Name)
+# Keep the row with best RSR per (PDBID, Ligand Name)
 hiqbind_subset = (
     merged
-    .sort_values('system_ligand_validation_average_rsr', ascending=False)
+    .sort_values('system_ligand_validation_average_rsr', ascending=True)
     .drop_duplicates(subset=['PDBID', 'Ligand Name'], keep='first')
     .drop(columns=['PDBID', 'Ligand Name'])
     .reset_index(drop=True)
@@ -87,7 +95,7 @@ merged_ccd = subset.merge(
 
 best_ccd = (
     merged_ccd
-    .sort_values('system_ligand_validation_average_rsr', ascending=False)
+    .sort_values('system_ligand_validation_average_rsr', ascending=True)
     .drop_duplicates(subset=['pdb_id', 'ligand_name'], keep='first')
     .drop(columns=['ligand_name'])
 )
@@ -101,7 +109,7 @@ merged_non_ccd = subset.merge(
 )
 best_non_ccd = (
     merged_non_ccd
-    .sort_values('system_ligand_validation_average_rsr', ascending=False)
+    .sort_values('ligand_num_heavy_atoms', ascending=False)
     .drop_duplicates(subset=['pdb_id'], keep='first')
 )
 
@@ -141,7 +149,7 @@ merged_ccd = subset.merge(
 
 best_ccd = (
     merged_ccd
-    .sort_values('system_ligand_validation_average_rsr', ascending=False)
+    .sort_values('system_ligand_validation_average_rsr', ascending=True)
     .drop_duplicates(subset=['pdb_id', 'ligand_name'], keep='first')
     .drop(columns=['ligand_name'])
 )
@@ -155,7 +163,7 @@ merged_non_ccd = subset.merge(
 )
 best_non_ccd = (
     merged_non_ccd
-    .sort_values('system_ligand_validation_average_rsr', ascending=False)
+    .sort_values('ligand_num_heavy_atoms', ascending=False)
     .drop_duplicates(subset=['pdb_id'], keep='first')
 )
 

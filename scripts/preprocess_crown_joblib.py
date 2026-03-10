@@ -8,7 +8,7 @@ from joblib import Parallel, delayed
 NUM_CORES = 96
 MAXDEV_THRESHOLD = 0.1
 MAX_COUNT = 500
-REFINE_TIMEOUT = 600  # 10 minutes per complex
+REFINE_TIMEOUT = 1200  # 10 minutes per complex
 
 # Restrict sqm/antechamber to 1 thread per worker
 os.environ['OMP_NUM_THREADS'] = '1'
@@ -81,7 +81,7 @@ def main():
 	# Step 4: make fixed systems directory to work with later
 #	os.makedirs(DATA_DIR / 'CROWN' / 'systems', exist_ok = True)
 
-	subset = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'crown_final.csv')
+	subset = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'subset1.csv').sample(frac = 1)
 
 #	Parallel(n_jobs = 1, verbose = 10)(delayed(split_system)(
 #			pdb_path = Path(f'{DATA_DIR}/CROWN/raw_pdb/{row.basename}.pdb'),
@@ -90,10 +90,7 @@ def main():
 #		) for row in df.itertuples())
 
 	# Step 5: Protonate and energy-minimize
-	tuple_list = Parallel(n_jobs = 96, verbose = 10)(delayed(refine_with_timeout)(row.basename) for row in subset.itertuples())
-
-	rmsd_df = pd.DataFrame(results, columns = ['dirname', 'rmsd_nonmobile', 'rmsd_pocket', 'rmsd_ligand']).dropna()
-	rmsd_df.to_csv('mobile_rmsd.csv', index = False)
+	Parallel(n_jobs = NUM_CORES, verbose = 10)(delayed(refine_with_timeout)(row.basename) for row in subset.itertuples())
 
 if __name__ == '__main__':
 	main()

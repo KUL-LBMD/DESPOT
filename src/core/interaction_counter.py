@@ -215,7 +215,7 @@ class DESPOT_Counter:
             arr_3d=self.bin_arr_3d
         )
 
-    def find_interactions_parallel(self, n_workers=4, max_queued=8):
+    def find_interactions_parallel(self, n_workers=32, max_queued=64):
         """
         Loop over all files with parallel MOL2 conversion feeding a processing queue.
         """

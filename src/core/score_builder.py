@@ -341,7 +341,7 @@ class DESPOT_SH_Builder:
         Applies volume normalization and Gaussian smoothing on raw counts
         """
 
-        sigma_angle_rad = np.deg2rad(self.sigma_angle * 3.0)  # convert bin-units → radians
+        sigma_angle_rad = np.deg2rad(5.0)  # convert bin-units → radians
         n_lat, n_lon = 60, 60
 
         # 1D case

@@ -116,7 +116,7 @@ def parse_pdb(file_path):
 				chain_id = line[21].strip()
 				atom_name = line[12:16].strip()
 				element = line[76:78].strip()
-				if element == 'H':
+				if element in {'H', 'D'}:
 					continue
 
 				try:

@@ -46,7 +46,7 @@ STANDARD_AMINO_ACIDS = {
 
 WATER_NAMES = {'HOH', 'WAT', 'TIP3', 'SOL', 'OPC'}
 METALLOCOFACTORS_AMBER = {'HEM', 'SF4', 'MGD'}
-TEMPLATES_TO_REMOVE = {'AG1', 'Ce', 'Cr', 'CU1', 'EU3', 'FE2', 'TL1'}
+TEMPLATES_TO_REMOVE = {'AG1', 'Ce', 'Cr', 'CU1', 'EU3', 'FE2', 'TL1', 'Sm'}
 
 # ============================================================================
 def get_file_length(path):
@@ -318,6 +318,9 @@ def add_bonds(topology, positions, resname_set):
                     ej = atoms[j].element.symbol
 
                     if ei == 'H' and ej == 'H':
+                        continue
+
+                    elif ei in metal_set and ej in metal_set:
                         continue
 
                     elif ei == 'H' or ej == 'H':
@@ -617,18 +620,6 @@ def refine_system(input_dir):
 
 			pos_after = state.getPositions(asNumpy=True).value_in_unit(unit.angstrom)
 
-			# Separate atom sets for RMSD reporting
-			all_heavy_atoms = {atom.index for atom in modeller.topology.atoms() if atom.element.symbol != 'H'}
-			mobile_ligand_atoms = sorted(mobile_atoms & ligand_indices)
-			mobile_protein_atoms = sorted(mobile_atoms - ligand_indices)
-			nonmobile_atoms = sorted(all_heavy_atoms - mobile_atoms)
-
-			rmsd_nonmobile = calc_rmsd(pos_before, pos_after, nonmobile_atoms)
-			rmsd_mobile_protein = calc_rmsd(pos_before, pos_after, mobile_protein_atoms)
-			rmsd_mobile_ligand = calc_rmsd(pos_before, pos_after, mobile_ligand_atoms)
-
-			logger.info(f'{input_dir} - RMSD nonmobile: {rmsd_nonmobile:.4f} | mobile protein: {rmsd_mobile_protein:.4f} | mobile ligand: {rmsd_mobile_ligand:.4f}')
-
 			# Save minimized structure as PDB (protein/water only, no ligands)
 			os.makedirs(DATA_DIR / 'CROWN' / 'processed_systems' / input_dir, exist_ok = True)
 			pdb_modeller = Modeller(modeller.topology, minimized_positions)
@@ -652,11 +643,8 @@ def refine_system(input_dir):
 			logger.removeHandler(handler)
 			handler.close()
 
-			return input_dir, rmsd_nonmobile, rmsd_mobile_protein, rmsd_mobile_ligand
-
 	except Exception as e:
 
 		logger.exception(f"Refinement failed for {input_dir}")
 		logger.removeHandler(handler)
 		handler.close()
-		return None, None, None, None

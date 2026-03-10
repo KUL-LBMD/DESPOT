@@ -3,7 +3,7 @@ from src.core.interaction_counter import DESPOT_Counter
 from src.core.score_builder import DESPOT_Builder, DESPOT_SH_Builder, DESPOT_Iso_Builder, DESPOT_DS_Builder
 
 DATABASE = 'HiQBind'
-#DATABASE = 'CROWN'
+#DATABASE = 'CROWN_min'
 
 if __name__ == '__main__':
 
@@ -24,13 +24,6 @@ if __name__ == '__main__':
 
 	print('Building DESPOT-Iso')
 	builder = DESPOT_Iso_Builder(DATABASE)
-	builder.blur_counts()
-	builder.counts_to_prob()
-	builder.ref_probs()
-	builder.inverse_boltzmann()
-
-	print('Building DESPOT-DS')
-	builder = DESPOT_DS_Builder(DATABASE)
 	builder.blur_counts()
 	builder.counts_to_prob()
 	builder.ref_probs()
