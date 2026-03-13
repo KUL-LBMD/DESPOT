@@ -4,7 +4,7 @@ from src.core.interaction_counter import DESPOT_Counter
 #DATABASE = 'HiQBind'
 #DATABASE = 'CROWN'
 #DATABASE = 'CROWN_min'
-DATABASE = 'CROWN_moe'
+DATABASE = 'CROWN_druglike_min'
 
 if __name__ == '__main__':
 

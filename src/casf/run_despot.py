@@ -12,7 +12,6 @@ import math
 def run_scoring(database):
 	scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database) # DESPOT
 	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif', database = database) # DESPOT-Iso
-	scorer3 = DESPOT_Scorer(mode = 'sh', database = database) # DESPOT-SH
 	converter = MolConverter()
 
 	# 1.1-1.2: Scoring + ranking power
@@ -28,9 +27,8 @@ def run_scoring(database):
 
 		score1 = np.sum(scorer1.score_complex(prot_df, lig_df))
 		score2 = np.sum(scorer2.score_complex(prot_df, lig_df))
-		score3 = np.sum(scorer3.score_complex(prot_df, lig_df))
 
-		score_dict = {'pdb_id': subdir, 'score1': score1, 'score2': score2, 'score3': score3}
+		score_dict = {'pdb_id': subdir, 'score1': score1, 'score2': score2}
 		score_list_of_dicts.append(score_dict)
 
 	score_df = pd.DataFrame(score_list_of_dicts)
@@ -41,16 +39,13 @@ def run_scoring(database):
 
 	df1 = score_df[['pdb_id', 'logKa', 'score1']].copy().rename(columns = {'score1': 'score'})
 	df2 = score_df[['pdb_id', 'logKa', 'score2']].copy().rename(columns = {'score2': 'score'})
-	df3 = score_df[['pdb_id', 'logKa', 'score3']].copy().rename(columns = {'score3': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
 	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
-	df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_sh_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
 
 def run_docking(database):
 	scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database) # DESPOT
 	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif', database = database) # DESPOT-Iso
-	scorer3 = DESPOT_Scorer(mode = 'sh', database = database) # DESPOT-SH
 	converter = MolConverter()
 
 	print('Starting docking benchmark')
@@ -75,19 +70,16 @@ def run_docking(database):
 		lig_df = pd.concat(concat_dfs, axis = 0)
 		scores1_init = scorer1.score_complex(prot_df, lig_df)
 		scores2_init = scorer2.score_complex(prot_df, lig_df)
-		scores3_init = scorer3.score_complex(prot_df, lig_df)
 
 		# Now trace back scorer per ligand
 		labels = lig_df['label_num'].values.astype(np.int64)
 		score1 = list(np.bincount(labels, weights = scores1_init))
 		score2 = list(np.bincount(labels, weights = scores2_init))
-		score3 = list(np.bincount(labels, weights = scores3_init))
 
 		temp_df = pd.DataFrame(
 			{'code': code_list,
 			 'score1': score1,
-			 'score2': score2,
-			 'score3': score3
+			 'score2': score2
 			})
 
 		rmsd_df = pd.read_csv(f'{DATA_DIR}/CASF-2016/decoys_docking/{subdir}_rmsd.csv')
@@ -100,11 +92,9 @@ def run_docking(database):
 
 	df1 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score1']].copy().rename(columns = {'score1': 'score'})
 	df2 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score2']].copy().rename(columns = {'score2': 'score'})
-	df3 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score3']].copy().rename(columns = {'score3': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
 	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
-	df3.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_sh_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
 
 def run_screening(n_jobs=-1, database = 'CROWN'):
     print('Starting screening benchmark')
@@ -117,13 +107,12 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
         """Process a single target protein against all molecules."""
         scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database)
         scorer2 = DESPOT_Isotropic_Scorer(mode='mif', database = database)
-        scorer3 = DESPOT_Scorer(mode = 'sh', database = database)
         converter = MolConverter()
 
         prot_df = converter.convert_mol2(f'{DATA_DIR}/CASF-2016/coreset/{subdir}/{subdir}_protein.mol2')
         num_chunks = math.ceil(len(molecule_list) / chunk_size)
 
-        target_scores = np.zeros((3, len(molecule_list)), dtype=np.float32)
+        target_scores = np.zeros((2, len(molecule_list)), dtype=np.float32)
 
         for j in range(num_chunks):
             subset_list = molecule_list[(j*chunk_size):((j+1)*chunk_size)]
@@ -137,21 +126,17 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
             lig_df = pd.concat(concat_dfs, axis=0)
             scores1_init = scorer1.score_complex(prot_df, lig_df)
             scores2_init = scorer2.score_complex(prot_df, lig_df)
-            scores3_init = scorer3.score_complex(prot_df, lig_df)
 
             if scores1_init is not None:
                 labels = lig_df['label_num'].values.astype(np.int64)
                 score1 = np.bincount(labels, weights=scores1_init)
                 score2 = np.bincount(labels, weights=scores2_init)
-                score3 = np.bincount(labels, weights=scores3_init)
             else:
                 score1 = np.full(len(subset_list), np.nan)
                 score2 = np.full(len(subset_list), np.nan)
-                score3 = np.full(len(subset_list), np.nan)
 
             target_scores[0, (j*chunk_size):((j+1)*chunk_size)] = score1
             target_scores[1, (j*chunk_size):((j+1)*chunk_size)] = score2
-            target_scores[2, (j*chunk_size):((j+1)*chunk_size)] = score3
 
         return target_scores
 
@@ -165,7 +150,6 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
 
     df1 = pd.DataFrame(score_arr[0,:,:], index=target_list, columns=molecule_list)
     df2 = pd.DataFrame(score_arr[1,:,:], index=target_list, columns=molecule_list)
-    df3 = pd.DataFrame(score_arr[2,:,:], index=target_list, columns=molecule_list)
 
     file_path = f"{DATA_DIR}/CASF-2016/power_screening/TargetInfo.dat"
     target_dict = {}
@@ -180,8 +164,8 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
         Ls = parts[1:]
         target_dict[T] = Ls
 
-    df_list = [df1, df2, df3]
-    name_list = ['despot', 'despot_iso', 'despot_sh']
+    df_list = [df1, df2]
+    name_list = ['despot', 'despot_iso']
 
     for df, name in zip(df_list, name_list):
         df_long = (

@@ -1,18 +1,26 @@
-import pandas as pd
 import os
+import pandas as pd
 
 from src.config import DATA_DIR
 
-def remove_files(basename_set, path):
-	for file in os.listdir(path):
-		basename = file[:-5]
-		if not basename in basename_set:
-			os.remove(f'{path}/{file}')
+df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'CROWN_full.csv')
+basename_list = df['basename'].tolist()
 
-df = pd.read_csv(DATA_DIR / 'CROWN' / 'metadata' / 'CROWN_train.csv')
-basename_set = df['basename'].tolist()
+rows_to_drop = []
 
-remove_files(basename_set, DATA_DIR / 'CROWN' / 'processed_mol2' / 'receptor')
-remove_files(basename_set, DATA_DIR / 'CROWN' / 'processed_mol2' / 'ligand')
-remove_files(basename_set, DATA_DIR / 'CROWN_min' / 'processed_mol2' / 'receptor')
-remove_files(basename_set, DATA_DIR / 'CROWN_min' / 'processed_mol2' / 'ligand')
+for idx, basename in enumerate(basename_list):
+	file_paths = [f'{DATA_DIR}/CROWN/processed_mol2/receptor/{basename}.mol2', f'{DATA_DIR}/CROWN/processed_mol2/ligand/{basename}.mol2',
+		f'{DATA_DIR}/CROWN_min/processed_mol2/receptor/{basename}.mol2', f'{DATA_DIR}/CROWN_min/processed_mol2/ligand/{basename}.mol2']
+
+	is_incomplete = any(not os.path.exists(fp) or os.path.getsize(fp) == 0 for fp in file_paths)
+
+	if is_incomplete:
+		for fp in file_paths:
+			if os.path.exists(fp):
+				os.remove(fp)
+		rows_to_drop.append(idx)
+
+	print(idx)
+
+df.drop(index=rows_to_drop, inplace=True)
+df.to_csv(DATA_DIR / 'CROWN' / 'metadata' / 'CROWN_full.csv')

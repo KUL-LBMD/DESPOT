@@ -23,16 +23,14 @@ import os
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_min', 'despot_iso_crown_min', 'despot_sh_crown_min', 'despot_crown', 'despot_iso_crown', 'despot_hiqbind', 'despot_iso_hiqbind', 'despot_sh_hiqbind',
-    'despot_crown_moe', 'despot_iso_crown_moe', 'despot_sh_crown_moe',
+    'despot_crown_druglike', 'despot_iso_crown_druglike', 'despot_crown_druglike_min', 'despot_iso_crown_druglike_min',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT-CROWN_min', 'DESPOT-Iso-CROWN_min', 'DESPOT-SH-CROWN_min', 'DESPOT-CROWN', 'DESPOT-Iso-CROWN', 'DESPOT-HiQBind', 'DESPOT-Iso-HiQBind', 'DESPOT-SH-HiQBind',
-    'DESPOT-CROWN_MOE', 'DESPOT-Iso-CROWN_MOE', 'DESPOT-SH-CROWN_MOE',
+    'DESPOT', 'DESPOT-Iso', 'DESPOT-min', 'DESPOT-Iso-min',
     'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
     'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20',
@@ -47,9 +45,6 @@ CATEGORY_COLORS = {
 }
 
 SCORE_CATEGORY = {
-    'DESPOT': 'kbp',
-    'DESPOT-Iso': 'kbp',
-    'DESPOT-DS': 'kbp',
     'DrugScoreX': 'kbp',
     'ASP': 'kbp',
     'AutoDockVina': 'empirical',
@@ -99,15 +94,15 @@ Z_NAMES_CLEAN = [
     for p in Z_PARTNERS
 ]
 
-DATABASE = 'HiQBind'
-#DATABASE = 'CROWN_min'
+#DATABASE = 'HiQBind'
+DATABASE = 'CROWN_druglike_min'
 
 if __name__ == '__main__':
 
     ### Step 1: run DESPOT on all CASF entries and store data ###
-    run_scoring(DATABASE)
-    run_docking(DATABASE)
-    run_screening(n_jobs=8, database = DATABASE)
+    #run_scoring(DATABASE)
+    #run_docking(DATABASE)
+    #run_screening(n_jobs=8, database = DATABASE)
 
     ### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
 

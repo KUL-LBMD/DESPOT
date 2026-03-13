@@ -30,15 +30,8 @@ class DESPOT_Counter:
     def __init__(self, database):
 
         self.database = database
-
         self.converter = MolConverter()
-
-        with open(DATA_DIR / 'metadata' / 'casf_pdb_ids.txt', 'r') as f:
-            casf_ids = set([line.strip() for line in f])
-
-        self.file_list = [x for x in os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor') if not x[:4] in casf_ids]
-        print(len(os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor')))
-        print(len(self.file_list))
+        self.file_list = os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor')
 
         self.r_bins = np.arange(1.0, 6.0, 0.1)
         self.theta_bins_2d = np.arange(0, 180.0, 3.0)
