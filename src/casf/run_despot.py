@@ -11,7 +11,7 @@ import math
 
 def run_scoring(database):
 	scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database) # DESPOT
-	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif', database = database) # DESPOT-Iso
+	scorer2 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-Iso
 	converter = MolConverter()
 
 	# 1.1-1.2: Scoring + ranking power
@@ -41,11 +41,11 @@ def run_scoring(database):
 	df2 = score_df[['pdb_id', 'logKa', 'score2']].copy().rename(columns = {'score2': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
-	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
+	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
 
 def run_docking(database):
 	scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database) # DESPOT
-	scorer2 = DESPOT_Isotropic_Scorer(mode = 'mif', database = database) # DESPOT-Iso
+	scorer2 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-Iso
 	converter = MolConverter()
 
 	print('Starting docking benchmark')
@@ -94,7 +94,7 @@ def run_docking(database):
 	df2 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score2']].copy().rename(columns = {'score2': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
-	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_iso_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
+	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
 
 def run_screening(n_jobs=-1, database = 'CROWN'):
     print('Starting screening benchmark')
@@ -106,7 +106,7 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
     def process_target(subdir, database):
         """Process a single target protein against all molecules."""
         scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database)
-        scorer2 = DESPOT_Isotropic_Scorer(mode='mif', database = database)
+        scorer2 = DESPOT_Isotropic_Scorer(mode='drugscore', database = database)
         converter = MolConverter()
 
         prot_df = converter.convert_mol2(f'{DATA_DIR}/CASF-2016/coreset/{subdir}/{subdir}_protein.mol2')
@@ -165,7 +165,7 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
         target_dict[T] = Ls
 
     df_list = [df1, df2]
-    name_list = ['despot', 'despot_iso']
+    name_list = ['despot', 'despot_ds']
 
     for df, name in zip(df_list, name_list):
         df_long = (

@@ -31,7 +31,11 @@ class DESPOT_Counter:
 
         self.database = database
         self.converter = MolConverter()
-        self.file_list = os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor')
+
+        with open(DATA_DIR / 'metadata' / 'casf_pdb_ids.txt', 'r') as f:
+            casf_ids = [line.strip() for line in f]
+
+        self.file_list = [x for x in os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor') if not x[:4] in casf_ids]
 
         self.r_bins = np.arange(1.0, 6.0, 0.1)
         self.theta_bins_2d = np.arange(0, 180.0, 3.0)
@@ -40,12 +44,12 @@ class DESPOT_Counter:
 
         # Set types lists for ligand atoms and protein atoms
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' /f'atom_type_counts_{database.lower()}.csv')
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
 
         self.types_list_1d = (
             counts_df.loc[
                 (counts_df['local_reference_frame'] == 'Isotropic') &
-                (counts_df['total_occurrence'] > 1000),
+                (counts_df['protein_count'] > 1000),
                 'atom_type'
             ]
             .dropna()
@@ -56,7 +60,7 @@ class DESPOT_Counter:
         self.types_list_2d = (
             counts_df.loc[
                 (counts_df['local_reference_frame'] == 'Axial') &
-                (counts_df['total_occurrence'] > 1000),
+                (counts_df['protein_count'] > 1000),
                 'atom_type'
             ]
             .dropna()
@@ -67,7 +71,7 @@ class DESPOT_Counter:
         self.types_list_3d = (
             counts_df.loc[
                 (counts_df['local_reference_frame'] == 'Anisotropic') &
-                (counts_df['total_occurrence'] > 1000),
+                (counts_df['protein_count'] > 1000),
                 'atom_type'
             ]
             .dropna()
@@ -77,7 +81,7 @@ class DESPOT_Counter:
 
         self.ligand_types_list = (
             counts_df.loc[
-                (counts_df['total_occurrence'] > 500),
+                (counts_df['ligand_count'] > 500),
                 'atom_type'
             ]
             .dropna()
@@ -235,7 +239,6 @@ class DESPOT_Counter:
                             
                             if prot_df is not None and lig_df is not None:
                                 self._process_interaction_pair(prot_df, lig_df)
-                                self._process_interaction_pair(lig_df, prot_df)
                                 pbar.set_postfix_str(filename[:20])
                             else:
                                 pbar.write(f"{filename} (skipped)")

@@ -1,4 +1,4 @@
-name: DESPOT_v2
+name: DESPOT
 
 channels:
   - conda-forge

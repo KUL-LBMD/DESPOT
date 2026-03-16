@@ -16,12 +16,12 @@ class DESPOT_Builder:
 
         # Set types lists for ligand atoms and protein atoms
         self.database = database
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts_{self.database.lower()}.csv')
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
 
         self.types_list_1d = (
             counts_df.loc[
                 (counts_df['local_reference_frame'] == 'Isotropic') &
-                (counts_df['total_occurrence'] > 1000),
+                (counts_df['protein_count'] > 1000),
                 'atom_type'
             ]
             .dropna()
@@ -32,7 +32,7 @@ class DESPOT_Builder:
         self.types_list_2d = (
             counts_df.loc[
                 (counts_df['local_reference_frame'] == 'Axial') &
-                (counts_df['total_occurrence'] > 1000),
+                (counts_df['protein_count'] > 1000),
                 'atom_type'
             ]
             .dropna()
@@ -43,7 +43,7 @@ class DESPOT_Builder:
         self.types_list_3d = (
             counts_df.loc[
                 (counts_df['local_reference_frame'] == 'Anisotropic') &
-                (counts_df['total_occurrence'] > 1000),
+                (counts_df['protein_count'] > 1000),
                 'atom_type'
             ]
             .dropna()
@@ -53,7 +53,7 @@ class DESPOT_Builder:
 
         self.ligand_types_list = (
             counts_df.loc[
-                (counts_df['total_occurrence'] > 500),
+                (counts_df['ligand_count'] > 500),
                 'atom_type'
             ]
             .dropna()
@@ -209,7 +209,7 @@ class DESPOT_Iso_Builder:
     def __init__(self, database):
 
         # Set types lists for ligand atoms and protein atoms
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts_{database.lower()}.csv')
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
         self.database = database
 
         self.types_list_1d = (
@@ -326,3 +326,177 @@ class DESPOT_Iso_Builder:
 
         np.savez_compressed(DATA_DIR / 'potentials' / f'despot_iso_scores_{self.database.lower()}.npz', 
             scores_1d = self.scores_1d)
+
+class DESPOT_DS_Builder:
+    """
+    Class for building isotropic statistical potentials
+    """
+
+    def __init__(self, database):
+
+        self.database = database
+
+        # Set types lists for ligand atoms and protein atoms
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
+
+        self.types_list_1d = (
+            counts_df.loc[
+                (counts_df['local_reference_frame'] == 'Isotropic') &
+                (counts_df['protein_count'] > 1000),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.types_list_2d = (
+            counts_df.loc[
+                (counts_df['local_reference_frame'] == 'Axial') &
+                (counts_df['protein_count'] > 1000),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.types_list_3d = (
+            counts_df.loc[
+                (counts_df['local_reference_frame'] == 'Anisotropic') &
+                (counts_df['protein_count'] > 1000),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.ligand_types_list = (
+            counts_df.loc[
+                (counts_df['ligand_count'] > 500),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.prot_types_list = self.types_list_1d + self.types_list_2d + self.types_list_3d
+
+        # Load raw counts
+        loaded = np.load(DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz')
+        counts_1d = loaded['arr_1d']
+        counts_2d = loaded['arr_2d']
+        counts_3d = loaded['arr_3d']
+
+        # Combine all counts into [p,l,r] array
+        total_counts_2d = np.sum(counts_2d, axis = 3)
+        total_counts_3d = np.sum(counts_3d, axis = (3,4))
+        self.counts = np.concatenate((counts_1d, total_counts_2d, total_counts_3d))
+
+        self.r_bins = np.arange(1.0, 6.1, 0.1)
+        self.sigma_r = 1
+
+    def blur_counts(self):
+        """
+        Applies volume normalization and Gaussian smoothing on raw counts
+        """
+
+        THRESHOLD = 500
+        self.zero_combos = []
+        for i in range(self.counts.shape[0]):
+            for j in range(self.counts.shape[1]):
+                value = self.counts[i,j,:].sum()
+                if value < THRESHOLD:
+                    self.counts[i,j,:] = 0
+                    self.zero_combos.append((i,j))
+
+        # 1D case
+        volume_corrections_1d = np.zeros((self.counts.shape[2]))
+        for i in range(volume_corrections_1d.shape[0]):
+            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
+            r_mid = (r_i + r_e) / 2
+            r_factor = r_mid**2 * (r_e - r_i)
+            volume_corrections_1d[i] = 4 * np.pi * r_factor
+
+        normalized_counts_1d = self.counts / volume_corrections_1d[np.newaxis, np.newaxis, :]
+        self.rho = gaussian_filter(normalized_counts_1d, sigma = [0, 0, self.sigma_r])
+
+    def counts_to_prob(self):
+        """P(r | p, l) = n(p,l,r) / sum_r{n(p,l,r)}"""
+
+        denom_arr = np.sum(self.rho, axis = 2, keepdims = True) + 1e-12 # [p,l,r]
+        self.prob = self.rho / denom_arr
+
+        for i,j in self.zero_combos:
+            self.prob[i,j,:] = 0
+
+    def cluster_probs(self):
+        """Applies complete linkage clustering to probability functions"""
+
+        # Step 1: compute distance matrix
+        flat_probs = rearrange(self.prob, 'p l r -> (p l) r')
+        dist_matrix = squareform(cdist(flat_probs, flat_probs, metric = 'sqeuclidean'))
+
+        # Complete linkage clustering
+        dendrogram = linkage(dist_matrix, method = 'complete')
+        clusters = fcluster(dendrogram, t = 0.0025, criterion = 'distance') - 1
+        num_clusters = np.max(clusters) + 1
+
+        # Cluster PDFs
+        self.clustered_probs = np.zeros((num_clusters, len(self.r_bins)-1))
+        for cluster_idx in range(num_clusters):
+            mask = clusters == cluster_idx
+            cluster_probs = flat_probs[mask]
+            self.clustered_probs[cluster_idx,:] = np.mean(cluster_probs, axis = 0)
+
+        # Map original p_l pairs to cluster
+        keys = [f'{p}_{l}' for p in self.prot_types_list for l in self.ligand_types_list]
+        self.map_dict = {k:v for k,v in zip(keys, clusters)}
+
+    def ref_probs(self):
+
+        n_c, n_r = self.clustered_probs.shape
+        num_pot = 0
+        ref_sum = np.zeros(n_r)
+
+        self.zero_cluster = None
+
+        for c in range(n_c):
+            if not self.clustered_probs[c].sum() == 0:
+                ref_sum += self.clustered_probs[c]
+                num_pot += 1
+            else:
+                self.zero_cluster = c
+
+        self.ref = ref_sum / num_pot
+
+    def inverse_boltzmann(self):
+        """score[p,l,r] = ln[P(r | p,l) / P(r)]"""
+
+        print('Running inverse Boltzmann')
+        eps = 1e-12 # Lower bound, prevent 0 probabilities
+
+        eps = 1e-12 # Lower bound, prevent 0 probabilities
+
+        # 1D case
+        init_scores = self.clustered_probs / self.ref[np.newaxis, :] # [c, r]
+        init_scores = np.clip(init_scores, eps, None)
+        temp_scores = np.clip(-1 * np.log10(init_scores), a_min = -5, a_max = 5)
+
+        if self.zero_cluster is not None:
+            temp_scores[self.zero_cluster] = 0.0
+
+        # Map scores back to original p_l indices
+        n_p, n_l, n_r = self.counts.shape
+        self.scores = np.zeros_like(self.counts)
+
+        for i in range(n_p):
+            for j in range(n_l):
+                key = f'{self.prot_types_list[i]}_{self.ligand_types_list[j]}'
+                cluster_idx = self.map_dict[key]
+                self.scores[i,j,:] = temp_scores[cluster_idx]
+
+        np.savez_compressed(DATA_DIR / 'potentials' / f'despot_ds_scores_{self.database.lower()}.npz', 
+            scores_1d = self.scores)

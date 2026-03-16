@@ -1,5 +1,5 @@
 from src.config import DATA_DIR
-from src.casf.erc import add_erc_columns, add_zscore_columns
+from src.casf.ecr import add_erc_columns
 
 import numpy as np
 import pandas as pd
@@ -20,13 +20,6 @@ def get_scoring_values(name_list, z_config = None):
         df = pd.merge(df, new_df, on=['pdb_id', 'logKa'])
 
     extended = list(name_list)
-    if z_config:
-        z_names = add_zscore_columns(
-            df,
-            base=z_config['base'],
-            partners=z_config['partners'],
-        )
-        extended += z_names
 
     return df, extended
 
@@ -46,13 +39,6 @@ def get_ranking_values(name_list, z_config=None):
         df = pd.merge(df, new_df, on=['pdb_id', 'logKa'])
 
     extended = list(name_list)
-    if z_config:
-        z_names = add_zscore_columns(
-            df,
-            base=z_config['base'],
-            partners=z_config['partners'],
-        )
-        extended += z_names
 
     score_names = [f'{x}_score' for x in extended]
     S = len(extended)
@@ -99,8 +85,7 @@ def get_docking_values(name_list, erc_config=None):
     if erc_config:
         erc_names = add_erc_columns(
             merged_df,
-            base=erc_config['base'],
-            partners=erc_config['partners'],
+            partner_combos=erc_config['partner_combos'],
             group_col='pdb_id',            # rank poses within each target
             sigma_frac=erc_config.get('sigma_frac', 0.05),
         )
@@ -150,7 +135,6 @@ def get_docking_values(name_list, erc_config=None):
 
     return top_arr, spearman_thresholds, extended
 
-
 def get_screening_values(name_list, erc_config=None):
     """
     Returns
@@ -189,8 +173,7 @@ def get_screening_values(name_list, erc_config=None):
     if erc_config:
         erc_names = add_erc_columns(
             merged_df,
-            base=erc_config['base'],
-            partners=erc_config['partners'],
+            partner_combos=erc_config['partner_combos'],
             group_col='pdb_id',            # rank ligands within each target
             sigma_frac=erc_config.get('sigma_frac', 0.05),
         )
@@ -228,8 +211,7 @@ def get_screening_values(name_list, erc_config=None):
     if erc_config:
         erc_names = add_erc_columns(
             merged_df,
-            base=erc_config['base'],
-            partners=erc_config['partners'],
+            partner_combos=erc_config['partner_combos'],
             group_col='pdb_id',            # rank ligands within each target
             sigma_frac=erc_config.get('sigma_frac', 0.05),
         )

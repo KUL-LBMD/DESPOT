@@ -17,20 +17,21 @@ from src.casf.plot import generate_combined_figure
 import numpy as np
 import pandas as pd
 import os
+import argparse
 
 # ============================================================================
 # Name lists
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_druglike', 'despot_iso_crown_druglike', 'despot_crown_druglike_min', 'despot_iso_crown_druglike_min',
+    'despot_crown_druglike_min', 'despot_ds_crown_druglike_min', 'despot_crown_druglike', 'despot_ds_crown_druglike',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'DESPOT-Iso', 'DESPOT-min', 'DESPOT-Iso-min',
+    'DESPOT', 'DESPOT-DS', 'DESPOT-Xtal', 'DESPOT-DS-Xtal',
     'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
     'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20',
@@ -67,7 +68,7 @@ SCORE_CATEGORY = {
 ERC_PARTNERS = []
 ERC_CONFIG = {
     'base': 'despot',
-    'partners': ERC_PARTNERS,
+    'partner_combos': ERC_PARTNERS,
     'sigma_frac': 0.05,
 }
 
@@ -94,15 +95,19 @@ Z_NAMES_CLEAN = [
     for p in Z_PARTNERS
 ]
 
-#DATABASE = 'HiQBind'
-DATABASE = 'CROWN_druglike_min'
-
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky'], default = 'CROWN_train', help = 'Data source to use')
+    args = parser.parse_args()
+
+    DATABASE = args.database
+
+
     ### Step 1: run DESPOT on all CASF entries and store data ###
-    #run_scoring(DATABASE)
-    #run_docking(DATABASE)
-    #run_screening(n_jobs=8, database = DATABASE)
+    run_scoring(DATABASE)
+    run_docking(DATABASE)
+    run_screening(n_jobs=8, database = DATABASE)
 
     ### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
 

@@ -295,8 +295,8 @@ class DESPOT_Scorer:
 
         self.database = database
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts_{database.lower()}.csv')
-        colname1, colname2 = 'total_occurrence', 'total_occurrence'
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
+        colname1, colname2 = 'protein_count', 'ligand_count'
 
         self.types_list_1d = counts_df.loc[
             (counts_df['local_reference_frame'] == 'Isotropic') & (counts_df[colname1] > 1000),
@@ -511,8 +511,8 @@ class DESPOT_Isotropic_Scorer:
 
         self.database = database
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts_{database.lower()}.csv')
-        colname1, colname2 = 'total_occurrence', 'total_occurrence'
+        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
+        colname1, colname2 = 'protein_count', 'ligand_count'
 
         if mode == 'mif':
             loaded = np.load(DATA_DIR / 'potentials' / f'despot_iso_scores_{self.database.lower()}.npz')

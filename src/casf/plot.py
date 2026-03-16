@@ -33,12 +33,12 @@ HEATMAP_CMAP = 'mako_r'
 plt.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-    'font.size': 5,
+    'font.size': 6,
     'axes.titlesize': 10,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 2,
-    'ytick.labelsize': 2,
-    'legend.fontsize': 5,
+    'axes.labelsize': 8,
+    'xtick.labelsize': 5.5,
+    'ytick.labelsize': 5.5,
+    'legend.fontsize': 6,
     'figure.dpi': 300,
     'savefig.dpi': 300,
     'savefig.bbox': 'tight',
@@ -48,15 +48,18 @@ plt.rcParams.update({
 })
 
 CATEGORY_COLORS = {
-    'empirical': '#E63946',
-    'physical': '#457B9D',
-    'kbp': '#2A9D8F',
+    'empirical': '#D55E00',   # Vermillion (Okabe-Ito)
+    'physical': '#0072B2',    # Blue (Okabe-Ito)
+    'kbp': '#009E73',         # Bluish green (Okabe-Ito)
+}
+
+CATEGORY_LABELS = {
+    'empirical': 'Empirical',
+    'physical': 'Physics-based',
+    'kbp': 'Knowledge-based potential',
 }
 
 SCORE_CATEGORY = {
-    'DESPOT': 'kbp',
-    'DESPOT-Iso': 'kbp',
-    'DESPOT-DS': 'kbp',
     'DrugScoreX': 'kbp',
     'ASP': 'kbp',
     'AutoDockVina': 'empirical',
@@ -199,7 +202,7 @@ def plot_stacked_bars(name_list, name_map, ax, data_arr, labels, bar_labels, tit
     ax.grid(axis='y', linestyle='--', alpha=0.3, linewidth=0.5)
     
     if show_legend:
-        ax.legend(title=legend_title, loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 5})
+        ax.legend(title=legend_title, loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(0.9, 1.05), title_fontproperties={'weight': 'bold', 'size': 8})
 
     for tick_label in ax.get_xticklabels():  
         name = tick_label.get_text()
@@ -270,6 +273,40 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     for ef_dict, pvals in zip(ef_dicts, pvals_ef):
         methods, groups = build_significance_groups(ef_dict, pvals, stat_key='mean')
         ef_methods_groups.append((methods, groups))
+
+    # -------------------------------------------------------------------------
+    # Step 1b: Print requested statistics
+    # -------------------------------------------------------------------------
+ 
+    despot_variants = ['DESPOT', 'DESPOT-Xtal']
+ 
+    # Docking power: top-1, top-2, top-3
+    print("\n=== Docking Power (Success Rate) ===")
+    for variant in despot_variants:
+        if variant in dock_name_list_clean:
+            idx = dock_name_list_clean.index(variant)
+            print(f"  {variant}: Top-1={dock_top_arr[idx, 0]:.3f}, "
+                  f"Top-2={dock_top_arr[idx, 1]:.3f}, "
+                  f"Top-3={dock_top_arr[idx, 2]:.3f}")
+ 
+    # Forward screening power: 1%, 2%, 5%
+    print("\n=== Forward Screening Power (Success Rate) ===")
+    for variant in despot_variants:
+        if variant in dock_name_list_clean:
+            idx = dock_name_list_clean.index(variant)
+            print(f"  {variant}: Top 1%={forward_top_arr[idx, 0]:.3f}, "
+                  f"Top 2%={forward_top_arr[idx, 1]:.3f}, "
+                  f"Top 5%={forward_top_arr[idx, 2]:.3f}")
+ 
+    # Enrichment factor p-values between DESPOT and DESPOT-DS
+    print("\n=== Enrichment Factor: DESPOT vs DESPOT-Xtal p-values ===")
+    ef_labels = ['EF@1%', 'EF@2%', 'EF@5%']
+    despot_score = 'despot_crown_druglike_min_score'
+    despot_ds_score = 'despot_crown_druglike_score'
+    for ef_label, pvals in zip(ef_labels, pvals_ef):
+        if despot_score in pvals.index and despot_ds_score in pvals.columns:
+            p = pvals.loc[despot_score, despot_ds_score]
+            print(f"  {ef_label}: p={p}")
     
     # -------------------------------------------------------------------------
     # Step 2: Create figure with GridSpec
@@ -354,6 +391,13 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
         if 'DESPOT' in tick_label.get_text():
             tick_label.set_fontweight('bold')
 
+    # Color heatmap labels by scoring function category
+    for tick_label in ax_heatmap.get_yticklabels():
+        name = tick_label.get_text()
+        cat = SCORE_CATEGORY.get(name)
+        if cat:
+            tick_label.set_color(CATEGORY_COLORS[cat])
+
     ax_heatmap.set_xlabel('RMSD threshold (Å)')
     ax_heatmap.set_title('(D) Binding funnel', loc='left', fontweight='bold', fontsize=9)
     
@@ -370,8 +414,8 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     ax_reverse.set_title('(F) Reverse screening', loc='left', fontweight='bold', fontsize=9)
     
     # Add shared legend for screening plots
-    ax_forward.legend(title='Cutoff', loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 7})
-    ax_reverse.legend(title='Cutoff', loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 7})
+    ax_forward.legend(title='Cutoff', loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 8})
+    ax_reverse.legend(title='Cutoff', loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 8})
     
     # Row 4: Enrichment factors
     ef_titles = ['(G) EF @ 1%', '(H) EF @ 2%', '(I) EF @ 5%']
@@ -388,8 +432,20 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     # Step 4: Final adjustments and save
     # -------------------------------------------------------------------------
     
+    # Add figure-level legend for scoring function categories
+    from matplotlib.patches import Patch
+    category_handles = [
+        Patch(facecolor=CATEGORY_COLORS['empirical'], label=CATEGORY_LABELS['empirical']),
+        Patch(facecolor=CATEGORY_COLORS['physical'], label=CATEGORY_LABELS['physical']),
+        Patch(facecolor=CATEGORY_COLORS['kbp'], label=CATEGORY_LABELS['kbp']),
+    ]
+    fig.legend(handles=category_handles, loc='lower center', ncol=3,
+               frameon=True, framealpha=0.9, edgecolor='none',
+               fontsize=7, bbox_to_anchor=(0.5, -0.025),
+               title='Scoring function type', title_fontproperties={'weight': 'bold', 'size': 8})
+    
     # Adjust layout
-    plt.subplots_adjust(left=0.12, right=0.95, top=0.97, bottom=0.05)
+    plt.subplots_adjust(left=0.12, right=0.95, top=0.97, bottom=0.07)
     
     # Save figure
     fig.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
