@@ -29,26 +29,28 @@ def parse_arguments():
 
 	parser.add_argument('-o', '--outpath', help = 'Path (relative or full) to output csv file. Example: test_out.csv')
 
-	parser.add_argument('-m', '--mode', type = str, choices = ['full', 'iso', 'ds'], default = 'full',
+	parser.add_argument('-m', '--mode', type = str, choices = ['full', 'ds'], default = 'full',
 		help = 'Which DESPOT mode to use for inference')
 
 	parser.add_argument('--bfac', action = 'store_true',
 		help = 'Make subdirectory that stores separate PDB file of each ligand pose, with atom-wise score stored as b-factor')
 
+	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky'], default = 'CROWN_train',
+		help = 'Data source to use')
+
 	return parser.parse_args()
 
 if __name__ == '__main__':
 	args = parse_arguments()
+        DATABASE = args.database
 
 	# Initialize scorer and converter
 	converter = MolConverter()
 
 	if args.mode == 'full':
-		scorer = DESPOT_Scorer()
-	elif args.mode == 'iso':
-		scorer = DESPOT_Isotropic_Scorer(mode = 'mif')
+		scorer = DESPOT_Scorer(DATABASE, mode = 'gaussian')
 	else:
-		scorer = DESPOT_Isotropic_Scorer(mode = 'pairwise')
+		scorer = DESPOT_Isotropic_Scorer(DATABASE, mode = 'drugscore')
 
 	# Initialize empty score list
 	score_list = []
