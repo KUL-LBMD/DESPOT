@@ -43,7 +43,7 @@ This script will download:
 
 To score a protein-ligand complex:
 ```bash
-python scripts/score_complex.py -p 1e66_protein.mol2 -l 1e66_decoys.mol2 -o test.csv -m full --bfac
+python scripts/score_complex.py -p 1e66_protein.mol2 -l 1e66_decoys.mol2 -o test.csv -m full --bfac --database CROWN_train  # Options are: [CROWN_train, CROWN_Xtal, CROWN_leaky]
 ```
 
 **Options:**
@@ -82,14 +82,15 @@ python scripts/preprocess_crown.py
 
 Train new DESPOT models:
 ```bash
-python scripts/train_despot.py
+python scripts/count_interactions.py --database CROWN_train  # Options are: [CROWN_train, CROWN_Xtal, CROWN_leaky]
+python scripts/train_despot.py --database CROWN_train  # Options are: [CROWN_train, CROWN_Xtal, CROWN_leaky]
 ```
 
 #### 3. Benchmark and Evaluate
 
 Evaluate trained models on the CASF benchmark set and generate performance plots:
 ```bash
-python scripts/benchmark_casf.py
+python scripts/benchmark_casf.py --database CROWN_train  # Options are: [CROWN_train, CROWN_Xtal, CROWN_leaky]
 ```
 
 ## Citation
