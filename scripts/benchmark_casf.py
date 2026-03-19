@@ -24,14 +24,14 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_druglike_min', 'despot_ds_crown_druglike_min', 'despot_crown_druglike', 'despot_ds_crown_druglike',
+    'despot_crown_druglike_min', 'despot_ds_crown_druglike_min', 'despot_crown_druglike', 'despot_ds_crown_druglike', 'despot_crown_leaky', 'despot_ds_crown_leaky',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'DESPOT-DS', 'DESPOT-Xtal', 'DESPOT-DS-Xtal',
+    'DESPOT', 'DESPOT-DS', 'DESPOT-Xtal', 'DESPOT-DS-Xtal', 'DESPOT-Leaky', 'DESPOT-DS-Leaky',
     'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
     'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20',
@@ -102,7 +102,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     DATABASE = args.database
-
 
     ### Step 1: run DESPOT on all CASF entries and store data ###
     run_scoring(DATABASE)

@@ -42,15 +42,15 @@ def parse_arguments():
 
 if __name__ == '__main__':
 	args = parse_arguments()
-        DATABASE = args.database
+	DATABASE = args.database
 
 	# Initialize scorer and converter
 	converter = MolConverter()
 
 	if args.mode == 'full':
-		scorer = DESPOT_Scorer(DATABASE, mode = 'gaussian')
+		scorer = DESPOT_Scorer(mode = 'gaussian', database = DATABASE)
 	else:
-		scorer = DESPOT_Isotropic_Scorer(DATABASE, mode = 'drugscore')
+		scorer = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = DATABASE)
 
 	# Initialize empty score list
 	score_list = []
