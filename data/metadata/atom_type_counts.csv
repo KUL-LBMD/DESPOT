@@ -1,181 +1,181 @@
 atom_type,protein_count,ligand_count,total_occurrence,Unnamed: 0,sybyl_type,element,hybridization,hydrogens,total_neighbors,definition,local_reference_frame
-O.am_1,42622362,49669,42672031,160,O.2,O,sp2,0,1,Amide O,Anisotropic
-C.am_3,42574268,28687,42602955,57,C.2,C,sp2,0,3,Carbonyl C in amide,Axial
-N.am_2,37683856,29938,37713794,113,N.am,N,sp2,1,3,Secondary amide N,Anisotropic
-C.3n_3,34627771,14689,34642460,27,C.3,C,sp3,1,4,sp3 C bound to N + 2 other heavy atoms,Axial
-C.3c_2,33848513,67577,33916090,19,C.3,C,sp3,2,4,Secondary C (bound to C only),Anisotropic
-C.3c_1,23238236,70051,23308287,18,C.3,C,sp3,3,4,Methyl group (bound to C only),Axial
-C.ar6_2,16131492,248320,16379812,60,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (C-only ring),Anisotropic
-O.co2_1,9559928,56587,9616515,162,O.co2,O,sp2,0,1,Carboxylate O,Anisotropic
-C.3c_3,8858561,7354,8865915,20,C.3,C,sp3,1,4,Tertiary C (bound to C only),Axial
-C.3n_2,7074689,31630,7106319,26,C.3,C,sp3,2,4,sp3 C bound to N + 1 other heavy atom,Anisotropic
-C.co2_3,4766448,28296,4794744,70,C.co2,C,sp2,0,3,Carboxylate C,Axial
-O.3oh_1,4506855,105402,4612257,155,O.3,O,sp3,1,2,Alcohol O,Axial
-N.gu_1,4024876,7876,4032752,126,N.pl3,N,sp2,"[1,2]","[2,3]",Guanidine N with 1 heavy neighbor,Anisotropic
-C.3r5_2,3709512,16877,3726389,40,C.3,C,sp3,2,4,sp3 C in 5-membered ring,Anisotropic
-C.ar6_3,3619013,76687,3695700,61,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (C-only ring),Axial
-N.am_1,3035031,2429,3037460,112,N.am,N,sp2,2,3,Primary amide N,Anisotropic
-C.ar5_2,2628811,37185,2665996,58,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 5-ring,Anisotropic
-C.oh_2,2309242,14806,2324048,79,C.3,C,sp3,2,4,Primary alcohol,Anisotropic
-C.oh_3,2175567,16348,2191915,80,C.3,C,sp3,1,4,Secondary alcohol,Axial
-N.4_1,2156053,10207,2166260,105,N.4,N,sp3,3,4,"Primary amine, charged",Axial
-C.ar6x_3,1987726,85301,2073027,68,C.ar,C,sp2,0,3,C in aromatic 6-ring with heteroatom substituent,Axial
-N.gu_2,2020213,22004,2042217,127,N.pl3,N,sp2,"[0,1]","[2,3]",Guanidine N with 2 heavy neighbors,Anisotropic
-C.guh_3,2011032,566,2011598,76,C.cat,C,sp2,0,3,Guanidinium C,Axial
-C.3r5x_3,1897494,86438,1983932,44,C.3,C,sp3,1,4,sp3 C in 5-membered ring with hetero-atom neighbor,Axial
-N.am_3,1914225,15893,1930118,114,N.am,N,sp2,0,3,Tertiary amide N,Axial
-C.3r5x_2,1854825,8853,1863678,43,C.3,C,sp3,2,4,sp3 C in 5-membered ring with hetero-atom neighbor,Anisotropic
-C.ar5_3,1618588,45526,1664114,59,C.ar,C,sp2,0,3,Substituted C in aromatic 5-ring,Axial
-N.ar5p_2,1596083,7372,1603455,119,N.ar,N,sp2,1,3,"Unsubstituted, charged N in 5-membered aromatic ring",Anisotropic
-C.3s_2,1549614,5175,1554789,53,C.3,C,sp3,2,4,sp3 C coupled to S,Anisotropic
-O.ph_1,1422070,15956,1438026,166,O.3,O,sp2,1,2,Phenol O,Anisotropic
-N.ar5_2,1018173,19774,1037947,115,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 5-membered aromatic ring",Anisotropic
-S.3_2,955555,3300,958855,171,S.3,S,sp3,0,2,sp3 S coupled to 2 C's,Anisotropic
-C.3s_1,953486,1276,954762,52,C.3,C,sp3,3,4,sp3 C coupled to S,Axial
-S.csh_1,510272,526,510798,173,S.3,S,sp3,1,1,Thiol S,Axial
-O.h2o_0,164365,1,164366,164,O.3,O,sp3,2,2,Water,Isotropic
-O.2p_1,49150,104981,154131,149,O.2,O,sp2,0,1,Primary phosphate O,Axial
-C.ar6o_3,28917,93511,122428,65,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (ortho relative to hetero-atom),Axial
-C.1_2,101272,4418,105690,2,C.1,C,sp,0,2,Secondary alkyne,Isotropic
-C.2n_2,91171,851,92022,6,C.2,C,sp2,1,3,Non-aromatic sp2 C bound to N and 1 other heavy atom,Anisotropic
-S.s_2,82744,63,82807,181,S.3,S,sp3,0,2,Disulphide bridges,Anisotropic
-C.2r3x_3,79927,0,79927,8,C.2,C,sp2,0,3,Non-aromatic sp2 C in 3-membered ring with hetero-atom neighbor,Axial
-O.3n_2,67728,396,68124,154,O.3,O,sp3,0,2,O coupled to N and C,Anisotropic
-O.3p_2,22919,40777,63696,156,O.3,O,sp3,0,2,Connecting O between phosphates,Anisotropic
-C.3r6x_3,5159,57592,62751,50,C.3,C,sp3,1,4,sp3 C in 6-membered ring with hetero-atom neighbor,Axial
-N.ar6_2,15676,39484,55160,121,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 6-membered aromatic ring",Anisotropic
-P.o4_4,18957,34766,53723,168,P.3,P,sp3,0,4,P coupled to 4 O's,Isotropic
-C.ar6m_3,12115,38553,50668,63,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (meta relative to hetero-atom),Axial
-C.ar6o_2,13196,35621,48817,64,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (ortho relative to hetero-atom),Anisotropic
-O.ke_1,27803,20549,48352,165,O.2,O,sp2,0,1,Ketone O,Anisotropic
-C.2c_1,44800,2905,47705,3,C.2,C,sp2,2,3,Primary alkene,Anisotropic
-C.et_2,15636,31372,47008,73,C.3,C,sp3,2,4,Ether C,Anisotropic
-O.3ret_2,12374,32619,44993,157,O.3,O,sp3,0,2,Ether O in ring,Anisotropic
-C.2r6x_3,27382,14768,42150,17,C.2,C,sp2,0,3,Non-aromatic sp2 C in 6-membered ring with hetero-atom neighbor,Axial
-C.3r6_2,4008,36522,40530,46,C.3,C,sp3,2,4,sp3 C in 6-membered ring,Anisotropic
-N.4_3,28869,5816,34685,107,N.4,N,sp3,1,4,"Tertiary amine, charged",Axial
-C.et_1,23515,10802,34317,72,C.3,C,sp3,3,4,Ether C,Axial
-C.3r3x_3,32437,694,33131,33,C.3,C,sp3,1,4,sp3 C in 3-membered ring with hetero-atom neighbor,Axial
-C.3r6x_2,2764,26115,28879,49,C.3,C,sp3,2,4,sp3 C in 6-membered ring with hetero-atom neighbor,Anisotropic
-C.2c_2,15795,12593,28388,4,C.2,C,sp2,1,3,Secondary alkene,Anisotropic
-C.ar6m_2,4787,20425,25212,62,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (meta relative to hetero-atom),Anisotropic
-C.es_3,22328,2765,25093,71,C.2,C,sp2,0,3,Ester C,Axial
-N.3c_2,23902,236,24138,99,N.3,N,sp3,1,3,"Secondary amine, uncharged",Anisotropic
-N.ar5p_3,6962,16370,23332,120,N.ar,N,sp2,0,3,"Substituted, charged N in 5-membered aromatic ring",Axial
-F_1,1592,21330,22922,86,F,F,sp3,0,1,Fluoride group,Axial
-O.es_1,18916,3696,22612,163,O.2,O,sp2,0,1,Carbonyl O in ester,Anisotropic
-N.mih_1,7002,14968,21970,131,N.am,N,sp2,"[1,2]","[2,3]",Primary amidine N,Anisotropic
-N.r6_3,13783,6987,20770,139,N.3,N,sp3,0,3,sp3 N in 6-membered ring,Axial
-C.2r6_2,14415,5347,19762,14,C.2,C,sp2,1,3,Non-aromatic sp2 C in 6-membered ring,Anisotropic
-C.1_1,18611,248,18859,1,C.1,C,sp,1,2,Primary alkyne,Axial
-O.3eta_2,1154,17506,18660,153,O.3,O,sp3,0,2,Ether O with aromatic ring as substituent,Anisotropic
-N.3c_1,18177,127,18304,98,N.3,N,sp3,2,3,"Primary amine, uncharged",Axial
-O.3es_2,10064,5816,15880,151,O.3,O,sp3,0,2,Ester alkoxy oxygen,Anisotropic
-N.mih_2,7425,7651,15076,132,N.am,N,sp2,"[0,1]","[2,3]",Secondary amidine N,Anisotropic
-C.3r6_3,803,11196,11999,47,C.3,C,sp3,1,4,sp3 C in 6-membered ring,Axial
-Cl_1,739,11248,11987,84,Cl,Cl,sp3,0,1,Chloride group,Axial
-N.2c_2,10605,1342,11947,95,N.2,N,sp2,"[0,1]","[2,3]","sp2 N, secondary",Anisotropic
-N.ar5n_2,629,10953,11582,116,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 5-membered aromatic ring next to N",Anisotropic
-Mg,11011,0,11011,90,Mg,Mg,/,/,/,Mg ion,Isotropic
-N.gu_3,8480,1761,10241,128,N.pl3,N,sp2,0,3,Guanidine N with 3 heavy neighbors,Axial
-N.im_2,2366,7668,10034,129,N.am,N,sp2,1,3,Secondary imide N,Anisotropic
-O.ar_2,7123,2602,9725,161,O.2,O,sp2,0,2,O in aromatic ring,Anisotropic
-O.2s_1,5693,3869,9562,150,O.2,O,sp2,0,1,Primary sulphate O,Axial
-C.ar6p_2,2957,6569,9526,66,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (para relative to hetero-atom),Anisotropic
-C.ar6p_3,1002,8518,9520,67,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (para relative to hetero-atom),Axial
-C.2r6_3,1549,7192,8741,15,C.2,C,sp2,0,3,Non-aromatic sp2 C in 6-membered ring,Axial
-C.o_2,7470,955,8425,77,C.2,C,sp2,1,3,C of terminal aldehyde,Anisotropic
-P.o3_4,1157,7127,8284,167,P.3,P,sp3,0,4,P coupled to 3 O's and 1 C,Isotropic
-C.2r5x_3,1737,5800,7537,13,C.2,C,sp2,0,3,Non-aromatic sp2 C in 5-membered ring with hetero-atom neighbor,Axial
-O.3et_2,1208,5402,6610,152,O.3,O,sp3,0,2,Ether oxygen,Anisotropic
-N.ar6p_3,4325,2184,6509,125,N.ar,N,sp2,0,3,"Substituted, charged N in 6-membered aromatic ring",Axial
-N.4_2,1253,5146,6399,106,N.4,N,sp3,2,4,"Secondary amine, charged",Anisotropic
-N.oh_2,4613,1653,6266,135,N.pl3,N,sp2,0,2,Nitroso group with 1 C neighbour,Anisotropic
-S.ar_2,556,5624,6180,172,S.2,S,sp2,0,2,S in aromatic ring,Anisotropic
-C.3r3x_4,5749,224,5973,34,C.3,C,sp3,0,4,sp3 C in 3-membered ring with hetero-atom neighbor,Isotropic
-Zn,5513,0,5513,182,Zn,Zn,/,/,/,Zn ion,Isotropic
-Fe,4843,498,5341,87,Fe,Fe,/,/,/,Fe ion,Isotropic
-C.3r5_3,490,4840,5330,41,C.3,C,sp3,1,4,sp3 C in 5-membered ring,Axial
-N.r6_2,2324,2726,5050,138,N.3,N,sp3,1,3,sp3 N in 6-membered ring,Anisotropic
-C.o_3,758,4241,4999,78,C.2,C,sp2,0,3,C of keto group,Axial
-C.3r6_4,329,4617,4946,48,C.3,C,sp3,0,4,sp3 C in 6-membered ring,Isotropic
-O.2n_1,665,4226,4891,147,O.2,O,sp2,0,1,Nitro O,Anisotropic
-C.3r3_2,690,3802,4492,29,C.3,C,sp3,2,4,sp3 C in 3-membered ring,Anisotropic
-C.2c_3,800,3660,4460,5,C.2,C,sp2,0,3,Tertiary alkene,Axial
-N.ar5np_3,153,4154,4307,118,N.ar,N,sp2,0,3,"Substituted, charged N in 5-membered aromatic ring next to N",Axial
-C.et_3,1551,2423,3974,74,C.3,C,sp3,1,4,Ether C,Axial
-C.3r6x_4,296,3654,3950,51,C.3,C,sp3,0,4,sp3 C in 6-membered ring with hetero-atom neighbor,Isotropic
-Mn,3762,0,3762,91,Mn,Mn,/,/,/,Mn ion,Isotropic
-C.3hal_4,270,3236,3506,25,C.3,C,sp3,0,4,sp3 C bound to halogen,Isotropic
-C.2r5x_2,3336,72,3408,12,C.2,C,sp2,1,3,Non-aromatic sp2 C in 5-membered ring with hetero-atom neighbor,Anisotropic
-N.2c_1,3223,137,3360,94,N.2,N,sp2,"[1,2]","[2,3]","sp2 N, primary",Anisotropic
-C.2r6x_2,1929,1390,3319,16,C.2,C,sp2,1,3,Non-aromatic sp2 C in 6-membered ring with hetero-atom neighbor,Anisotropic
-C.3r3x_2,2889,75,2964,32,C.3,C,sp3,2,4,sp3 C in 3-membered ring with hetero-atom neighbor,Anisotropic
-N.aa_2,254,2694,2948,110,N.2,N,sp2,"[0,1]","[2,3]",Secondary amine as aromatic substituent,Anisotropic
-Br_1,336,2524,2860,0,Br,Br,sp3,0,1,Bromide group,Axial
-N.1_1,476,2319,2795,93,N.1,N,sp,0,1,Nitrile N,Axial
-N.r5_3,1875,830,2705,137,N.3,N,sp3,0,3,sp3 N in 5-membered ring,Axial
-N.r5_2,2055,591,2646,136,N.3,N,sp3,1,3,sp3 N in 5-membered ring,Anisotropic
-N.ar5np_2,181,2437,2618,117,N.ar,N,sp2,1,3,"Unsubstituted, charged N in 5-membered aromatic ring next to N",Anisotropic
-C.2n_3,1428,970,2398,7,C.2,C,sp2,0,3,Non-aromatic sp2 C bound to N and 2 other heavy atoms,Axial
-Ca,2276,0,2276,82,Ca,Ca,/,/,/,Ca ion,Isotropic
-C.3r5x_4,142,2116,2258,45,C.3,C,sp3,0,4,sp3 C in 5-membered ring with hetero-atom neighbor,Isotropic
-N.o2_3,150,1967,2117,134,N.pl3,N,sp2,0,3,Nitro N,Axial
-N.3p_2,318,1449,1767,104,N.3,N,sp3,1,3,sp3 N bound to P,Anisotropic
-S.o4n0_4,1331,354,1685,179,S.3,S,sp3,0,4,Sulphate S,Isotropic
-N.aa_1,147,1534,1681,109,N.2,N,sp2,"[1,2]","[2,3]",Primary amine as aromatic substituent,Anisotropic
-C.3c_4,270,1380,1650,21,C.3,C,sp3,0,4,Quaternary C (bound to C only),Isotropic
-S.o0_3,983,590,1573,174,S.3,S,sp3,0,3,SF4 S,Axial
-O.al_1,711,857,1568,159,O.2,O,sp2,0,1,Aldehyde O,Anisotropic
-C.3r3_3,201,1347,1548,30,C.3,C,sp3,1,4,sp3 C in 3-membered ring,Axial
-S.2c_1,1007,434,1441,169,S.2,S,sp2,0,1,sp2 S coupled to C,Anisotropic
-S.r_2,81,1346,1427,180,S.3,S,sp3,0,2,sp3 S in ring,Anisotropic
-C.oh_4,186,1240,1426,81,C.3,C,sp3,0,4,Tertiary alcohol,Isotropic
-C.2r4x_3,1335,63,1398,9,C.2,C,sp2,0,3,Non-aromatic sp2 C in 4-membered ring with hetero-atom neighbor,Axial
-N.mih_3,706,656,1362,133,N.am,N,sp2,0,3,Tertiary amidine N,Axial
-C.2r5_3,109,1138,1247,11,C.2,C,sp2,0,3,Non-aromatic sp2 C in 5-membered ring,Axial
-N.ar6n_2,67,1156,1223,122,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 6-membered aromatic ring next to N",Anisotropic
-C.et_4,453,760,1213,75,C.3,C,sp3,0,4,Ether C,Isotropic
-N.im_3,48,1110,1158,130,N.am,N,sp2,0,3,Tertiary imide N,Axial
-N.aa_3,189,905,1094,111,N.2,N,sp2,0,3,Tertiary amine as aromatic substituent,Axial
-C.3r4x_2,152,892,1044,37,C.3,C,sp3,2,4,sp3 C in 4-membered ring with hetero-atom neighbor,Anisotropic
-C.3r4_2,114,885,999,35,C.3,C,sp3,2,4,sp3 C in 3-membered ring,Anisotropic
-S.o3n0_4,121,860,981,177,S.3,S,sp3,0,4,sp3 S coupled to O's and 1 C,Isotropic
-N.ar6np_3,10,895,905,123,N.ar,N,sp2,0,3,"Substituted, charged N in 6-membered aromatic ring next to N",Axial
-C.3n_4,196,678,874,28,C.3,C,sp3,0,4,sp3 C bound to N + 3 other heavy atoms,Isotropic
-C.3r4x_3,344,399,743,38,C.3,C,sp3,1,4,sp3 C in 4-membered ring with hetero-atom neighbor,Axial
-I_1,24,711,735,88,I,I,sp3,0,1,Iodine group,Axial
-N.ar6p_2,267,464,731,124,N.ar,N,sp2,1,3,"Unsubstituted, charged N in 6-membered aromatic ring",Anisotropic
-C.2r5_2,341,359,700,10,C.2,C,sp2,1,3,Non-aromatic sp2 C in 5-membered ring,Anisotropic
-C.3r5_4,72,613,685,42,C.3,C,sp3,0,4,sp3 C in 5-membered ring,Isotropic
-Na,616,0,616,145,Na,Na,/,/,/,Na ion,Isotropic
-S.2p_1,40,566,606,170,S.2,S,sp2,0,1,sp2 S coupled to P,Axial
-N.4_4,132,466,598,108,N.4,N,sp3,0,4,"Quaternary amine, charged",Isotropic
-C.am_2,354,243,597,56,C.2,C,sp2,1,3,Carbonyl C in terminal amide,Anisotropic
-N.2n_2,54,533,587,97,N.2,N,sp2,"[0,1]","[2,3]",sp2 bound to N and C,Anisotropic
-C.3r4_3,82,377,459,36,C.3,C,sp3,1,4,sp3 C in 3-membered ring,Axial
-O.3s_2,183,248,431,158,O.3,O,sp3,0,2,Connecting O between sulphates,Anisotropic
-C.3hal_3,17,366,383,24,C.3,C,sp3,1,4,sp3 C bound to halogen,Axial
-C.co2_2,382,0,382,69,C.co2,C,sp,0,2,CO2,Isotropic
-Ni,381,0,381,146,Ni,Ni,/,/,/,Ni ion,Isotropic
-N.3n_2,223,156,379,102,N.3,N,sp3,1,3,sp3 N bound to N and C,Anisotropic
-C.3hal_2,27,280,307,23,C.3,C,sp3,2,4,sp3 C bound to halogen,Anisotropic
-K,289,0,289,89,K,K,/,/,/,K ion,Isotropic
-C.3s_3,25,219,244,54,C.3,C,sp3,1,4,sp3 C coupled to S,Axial
-N.3n_1,124,86,210,101,N.3,N,sp3,2,3,sp3 N bound to N,Axial
-N.3n_3,158,48,206,103,N.3,N,sp3,0,3,sp3 N bound to N and 2 C's,Axial
-C.3r4x_4,103,83,186,39,C.3,C,sp3,0,4,sp3 C in 4-membered ring with hetero-atom neighbor,Isotropic
-C.3r3_4,10,161,171,31,C.3,C,sp3,0,4,sp3 C in 3-membered ring,Isotropic
-Cd,129,0,129,83,Cd,Cd,/,/,/,Cd ion,Isotropic
-N.3c_3,17,111,128,100,N.3,N,sp3,0,3,"Tertiary amine, uncharged",Axial
-C.3s_4,1,64,65,55,C.3,C,sp3,0,4,sp3 C coupled to S,Isotropic
-Cu,52,0,52,85,Cu,Cu,/,/,/,Cu ion,Isotropic
-N.2c_3,5,41,46,96,N.2,N,sp2,0,3,"sp2 N, tertiary, partial positive charge",Axial
-O.2o_1,25,0,25,148,O.2,O,sp2,0,1,Oxygen,Axial
-S.o3n1_4,0,23,23,178,S.3,S,sp3,0,4,sp3 S coupled to O's and 1 N,Isotropic
-N.sa3_2,0,18,18,143,N.2,N,sp2,1,3,Secondary sulfonamide N,Anisotropic
-S.o2n1_4,0,8,8,176,S.3,S,sp3,0,4,Sulphonamide S,Isotropic
-N.sa2_2,0,4,4,141,N.2,N,sp2,1,3,Secondary sulfonamide N,Anisotropic
-N.sa2_1,0,4,4,140,N.2,N,sp2,1,3,Primary sulfonamide N,Axial
+O.am_1,32020925,33844,32054769,160,O.2,O,sp2,0,1,Amide O,Anisotropic
+C.am_3,31987891,17802,32005693,57,C.2,C,sp2,0,3,Carbonyl C in amide,Axial
+N.am_2,28287638,20058,28307696,113,N.am,N,sp2,1,3,Secondary amide N,Anisotropic
+C.3n_3,25986532,10612,25997144,27,C.3,C,sp3,1,4,sp3 C bound to N + 2 other heavy atoms,Axial
+C.3c_2,25291216,50299,25341515,19,C.3,C,sp3,2,4,Secondary C (bound to C only),Anisotropic
+C.3c_1,17448098,48184,17496282,18,C.3,C,sp3,3,4,Methyl group (bound to C only),Axial
+C.ar6_2,12188685,146819,12335504,60,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (C-only ring),Anisotropic
+O.co2_1,7166883,43409,7210292,162,O.co2,O,sp2,0,1,Carboxylate O,Anisotropic
+C.3c_3,6628546,5165,6633711,20,C.3,C,sp3,1,4,Tertiary C (bound to C only),Axial
+C.3n_2,5306382,20338,5326720,26,C.3,C,sp3,2,4,sp3 C bound to N + 1 other heavy atom,Anisotropic
+C.co2_3,3576914,21706,3598620,70,C.co2,C,sp2,0,3,Carboxylate C,Axial
+O.3oh_1,3407879,86021,3493900,155,O.3,O,sp3,1,2,Alcohol O,Axial
+N.gu_1,2997482,5964,3003446,126,N.pl3,N,sp2,"[1,2]","[2,3]",Guanidine N with 1 heavy neighbor,Anisotropic
+C.3r5_2,2823831,10290,2834121,40,C.3,C,sp3,2,4,sp3 C in 5-membered ring,Anisotropic
+C.ar6_3,2736187,46107,2782294,61,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (C-only ring),Axial
+N.am_1,2287927,1564,2289491,112,N.am,N,sp2,2,3,Primary amide N,Anisotropic
+C.ar5_2,1960557,25688,1986245,58,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 5-ring,Anisotropic
+C.oh_2,1730844,12023,1742867,79,C.3,C,sp3,2,4,Primary alcohol,Anisotropic
+C.oh_3,1659579,13227,1672806,80,C.3,C,sp3,1,4,Secondary alcohol,Axial
+N.4_1,1599245,8036,1607281,105,N.4,N,sp3,3,4,"Primary amine, charged",Axial
+C.ar6x_3,1498695,50345,1549040,68,C.ar,C,sp2,0,3,C in aromatic 6-ring with heteroatom substituent,Axial
+N.gu_2,1504810,15186,1519996,127,N.pl3,N,sp2,"[0,1]","[2,3]",Guanidine N with 2 heavy neighbors,Anisotropic
+C.3r5x_3,1441925,71427,1513352,44,C.3,C,sp3,1,4,sp3 C in 5-membered ring with hetero-atom neighbor,Axial
+C.guh_3,1497577,404,1497981,76,C.cat,C,sp2,0,3,Guanidinium C,Axial
+N.am_3,1455918,11136,1467054,114,N.am,N,sp2,0,3,Tertiary amide N,Axial
+C.3r5x_2,1412013,4929,1416942,43,C.3,C,sp3,2,4,sp3 C in 5-membered ring with hetero-atom neighbor,Anisotropic
+C.ar5_3,1217590,28926,1246516,59,C.ar,C,sp2,0,3,Substituted C in aromatic 5-ring,Axial
+N.ar5p_2,1194795,5319,1200114,119,N.ar,N,sp2,1,3,"Unsubstituted, charged N in 5-membered aromatic ring",Anisotropic
+C.3s_2,1145760,4355,1150115,53,C.3,C,sp3,2,4,sp3 C coupled to S,Anisotropic
+O.ph_1,1067428,10940,1078368,166,O.3,O,sp2,1,2,Phenol O,Anisotropic
+N.ar5_2,754376,14668,769044,115,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 5-membered aromatic ring",Anisotropic
+S.3_2,699909,2459,702368,171,S.3,S,sp3,0,2,sp3 S coupled to 2 C's,Anisotropic
+C.3s_1,697997,1019,699016,52,C.3,C,sp3,3,4,sp3 C coupled to S,Axial
+S.csh_1,380366,458,380824,173,S.3,S,sp3,1,1,Thiol S,Axial
+O.h2o_0,125811,1,125812,164,O.3,O,sp3,2,2,Water,Isotropic
+O.2p_1,35170,86326,121496,149,O.2,O,sp2,0,1,Primary phosphate O,Axial
+C.ar6o_3,22175,68631,90806,65,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (ortho relative to hetero-atom),Axial
+C.1_2,64812,2972,67784,2,C.1,C,sp,0,2,Secondary alkyne,Isotropic
+S.s_2,64765,34,64799,181,S.3,S,sp3,0,2,Disulphide bridges,Anisotropic
+C.2r3x_3,58503,0,58503,8,C.2,C,sp2,0,3,Non-aromatic sp2 C in 3-membered ring with hetero-atom neighbor,Axial
+C.3r6x_3,7547,45211,52758,50,C.3,C,sp3,1,4,sp3 C in 6-membered ring with hetero-atom neighbor,Axial
+O.3p_2,16205,34222,50427,156,O.3,O,sp3,0,2,Connecting O between phosphates,Anisotropic
+O.3n_2,49920,256,50176,154,O.3,O,sp3,0,2,O coupled to N and C,Anisotropic
+C.2n_2,49011,621,49632,6,C.2,C,sp2,1,3,Non-aromatic sp2 C bound to N and 1 other heavy atom,Anisotropic
+P.o4_4,13515,29159,42674,168,P.3,P,sp3,0,4,P coupled to 4 O's,Isotropic
+N.ar6_2,11261,29003,40264,121,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 6-membered aromatic ring",Anisotropic
+C.2r6x_3,25720,11506,37226,17,C.2,C,sp2,0,3,Non-aromatic sp2 C in 6-membered ring with hetero-atom neighbor,Axial
+C.2c_1,33804,2468,36272,3,C.2,C,sp2,2,3,Primary alkene,Anisotropic
+C.ar6m_3,8599,27585,36184,63,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (meta relative to hetero-atom),Axial
+C.et_2,11260,24423,35683,73,C.3,C,sp3,2,4,Ether C,Anisotropic
+O.3ret_2,9398,26017,35415,157,O.3,O,sp3,0,2,Ether O in ring,Anisotropic
+C.ar6o_2,9101,24878,33979,64,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (ortho relative to hetero-atom),Anisotropic
+O.ke_1,17975,15377,33352,165,O.2,O,sp2,0,1,Ketone O,Anisotropic
+C.3r6_2,3234,22026,25260,46,C.3,C,sp3,2,4,sp3 C in 6-membered ring,Anisotropic
+N.4_3,20857,3346,24203,107,N.4,N,sp3,1,4,"Tertiary amine, charged",Axial
+C.3r3x_3,23450,357,23807,33,C.3,C,sp3,1,4,sp3 C in 3-membered ring with hetero-atom neighbor,Axial
+C.et_1,17196,6376,23572,72,C.3,C,sp3,3,4,Ether C,Axial
+C.2c_2,12970,10020,22990,4,C.2,C,sp2,1,3,Secondary alkene,Anisotropic
+C.es_3,18170,1895,20065,71,C.2,C,sp2,0,3,Ester C,Axial
+O.es_1,15274,2636,17910,163,O.2,O,sp2,0,1,Carbonyl O in ester,Anisotropic
+N.r6_3,12716,4994,17710,139,N.3,N,sp3,0,3,sp3 N in 6-membered ring,Axial
+C.2r6_2,13214,4410,17624,14,C.2,C,sp2,1,3,Non-aromatic sp2 C in 6-membered ring,Anisotropic
+N.3c_2,17420,195,17615,99,N.3,N,sp3,1,3,"Secondary amine, uncharged",Anisotropic
+N.ar5p_3,4844,12732,17576,120,N.ar,N,sp2,0,3,"Substituted, charged N in 5-membered aromatic ring",Axial
+N.mih_1,5079,12055,17134,131,N.am,N,sp2,"[1,2]","[2,3]",Primary amidine N,Anisotropic
+C.3r6x_2,2147,14420,16567,49,C.3,C,sp3,2,4,sp3 C in 6-membered ring with hetero-atom neighbor,Anisotropic
+C.ar6m_2,3588,12823,16411,62,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (meta relative to hetero-atom),Anisotropic
+F_1,989,12341,13330,86,F,F,sp3,0,1,Fluoride group,Axial
+N.3c_1,11780,95,11875,98,N.3,N,sp3,2,3,"Primary amine, uncharged",Axial
+O.3es_2,8191,3679,11870,151,O.3,O,sp3,0,2,Ester alkoxy oxygen,Anisotropic
+O.3eta_2,775,9796,10571,153,O.3,O,sp3,0,2,Ether O with aromatic ring as substituent,Anisotropic
+N.mih_2,5523,4287,9810,132,N.am,N,sp2,"[0,1]","[2,3]",Secondary amidine N,Anisotropic
+C.1_1,9549,172,9721,1,C.1,C,sp,1,2,Primary alkyne,Axial
+N.im_2,1879,6489,8368,129,N.am,N,sp2,1,3,Secondary imide N,Anisotropic
+Mg,8205,0,8205,90,Mg,Mg,/,/,/,Mg ion,Isotropic
+Cl_1,532,7152,7684,84,Cl,Cl,sp3,0,1,Chloride group,Axial
+C.3r6_3,622,6952,7574,47,C.3,C,sp3,1,4,sp3 C in 6-membered ring,Axial
+N.gu_3,6113,1137,7250,128,N.pl3,N,sp2,0,3,Guanidine N with 3 heavy neighbors,Axial
+O.ar_2,5319,1649,6968,161,O.2,O,sp2,0,2,O in aromatic ring,Anisotropic
+O.2s_1,3999,2814,6813,150,O.2,O,sp2,0,1,Primary sulphate O,Axial
+N.2c_2,5892,761,6653,95,N.2,N,sp2,"[0,1]","[2,3]","sp2 N, secondary",Anisotropic
+C.ar6p_3,832,5702,6534,67,C.ar,C,sp2,0,3,Substituted C in aromatic 6-ring (para relative to hetero-atom),Axial
+P.o3_4,820,5507,6327,167,P.3,P,sp3,0,4,P coupled to 3 O's and 1 C,Isotropic
+C.2r6_3,1213,4997,6210,15,C.2,C,sp2,0,3,Non-aromatic sp2 C in 6-membered ring,Axial
+N.ar5n_2,325,5719,6044,116,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 5-membered aromatic ring next to N",Anisotropic
+C.ar6p_2,1992,3578,5570,66,C.ar,C,sp2,1,3,Unsubstituted C in aromatic 6-ring (para relative to hetero-atom),Anisotropic
+C.o_2,4521,736,5257,77,C.2,C,sp2,1,3,C of terminal aldehyde,Anisotropic
+O.3et_2,1396,3852,5248,152,O.3,O,sp3,0,2,Ether oxygen,Anisotropic
+C.2r5x_3,1051,4134,5185,13,C.2,C,sp2,0,3,Non-aromatic sp2 C in 5-membered ring with hetero-atom neighbor,Axial
+Fe,4362,503,4865,87,Fe,Fe,/,/,/,Fe ion,Isotropic
+N.ar6p_3,2930,1511,4441,125,N.ar,N,sp2,0,3,"Substituted, charged N in 6-membered aromatic ring",Axial
+Zn,4374,0,4374,182,Zn,Zn,/,/,/,Zn ion,Isotropic
+N.oh_2,3426,876,4302,135,N.pl3,N,sp2,0,2,Nitroso group with 1 C neighbour,Anisotropic
+N.r6_2,2231,2031,4262,138,N.3,N,sp3,1,3,sp3 N in 6-membered ring,Anisotropic
+N.4_2,1020,3228,4248,106,N.4,N,sp3,2,4,"Secondary amine, charged",Anisotropic
+C.3r3x_4,4065,106,4171,34,C.3,C,sp3,0,4,sp3 C in 3-membered ring with hetero-atom neighbor,Isotropic
+C.3r5_3,412,3380,3792,41,C.3,C,sp3,1,4,sp3 C in 5-membered ring,Axial
+O.2n_1,545,3202,3747,147,O.2,O,sp2,0,1,Nitro O,Anisotropic
+C.3r6_4,294,3354,3648,48,C.3,C,sp3,0,4,sp3 C in 6-membered ring,Isotropic
+C.o_3,546,3001,3547,78,C.2,C,sp2,0,3,C of keto group,Axial
+S.ar_2,418,3014,3432,172,S.2,S,sp2,0,2,S in aromatic ring,Anisotropic
+C.2c_3,596,2646,3242,5,C.2,C,sp2,0,3,Tertiary alkene,Axial
+Mn,3039,0,3039,91,Mn,Mn,/,/,/,Mn ion,Isotropic
+C.2r6x_2,1533,1304,2837,16,C.2,C,sp2,1,3,Non-aromatic sp2 C in 6-membered ring with hetero-atom neighbor,Anisotropic
+C.et_3,1159,1601,2760,74,C.3,C,sp3,1,4,Ether C,Axial
+C.3r6x_4,236,2401,2637,51,C.3,C,sp3,0,4,sp3 C in 6-membered ring with hetero-atom neighbor,Isotropic
+N.ar5np_3,110,2194,2304,118,N.ar,N,sp2,0,3,"Substituted, charged N in 5-membered aromatic ring next to N",Axial
+C.3r3_2,463,1733,2196,29,C.3,C,sp3,2,4,sp3 C in 3-membered ring,Anisotropic
+C.3r3x_2,2051,75,2126,32,C.3,C,sp3,2,4,sp3 C in 3-membered ring with hetero-atom neighbor,Anisotropic
+Ca,2097,0,2097,82,Ca,Ca,/,/,/,Ca ion,Isotropic
+C.2r5x_2,1942,36,1978,12,C.2,C,sp2,1,3,Non-aromatic sp2 C in 5-membered ring with hetero-atom neighbor,Anisotropic
+Br_1,263,1684,1947,0,Br,Br,sp3,0,1,Bromide group,Axial
+N.1_1,338,1532,1870,93,N.1,N,sp,0,1,Nitrile N,Axial
+C.3hal_4,108,1753,1861,25,C.3,C,sp3,0,4,sp3 C bound to halogen,Isotropic
+N.r5_3,1374,394,1768,137,N.3,N,sp3,0,3,sp3 N in 5-membered ring,Axial
+N.aa_2,155,1595,1750,110,N.2,N,sp2,"[0,1]","[2,3]",Secondary amine as aromatic substituent,Anisotropic
+C.2n_3,1102,537,1639,7,C.2,C,sp2,0,3,Non-aromatic sp2 C bound to N and 2 other heavy atoms,Axial
+N.o2_3,130,1499,1629,134,N.pl3,N,sp2,0,3,Nitro N,Axial
+N.r5_2,1188,332,1520,136,N.3,N,sp3,1,3,sp3 N in 5-membered ring,Anisotropic
+N.2c_1,1471,48,1519,94,N.2,N,sp2,"[1,2]","[2,3]","sp2 N, primary",Anisotropic
+N.3p_2,195,1162,1357,104,N.3,N,sp3,1,3,sp3 N bound to P,Anisotropic
+C.3r5x_4,136,1215,1351,45,C.3,C,sp3,0,4,sp3 C in 5-membered ring with hetero-atom neighbor,Isotropic
+S.o0_3,760,584,1344,174,S.3,S,sp3,0,3,SF4 S,Axial
+N.ar5np_2,92,1244,1336,117,N.ar,N,sp2,1,3,"Unsubstituted, charged N in 5-membered aromatic ring next to N",Anisotropic
+O.al_1,554,677,1231,159,O.2,O,sp2,0,1,Aldehyde O,Anisotropic
+S.o4n0_4,938,285,1223,179,S.3,S,sp3,0,4,Sulphate S,Isotropic
+C.2r4x_3,1104,46,1150,9,C.2,C,sp2,0,3,Non-aromatic sp2 C in 4-membered ring with hetero-atom neighbor,Axial
+S.r_2,49,1026,1075,180,S.3,S,sp3,0,2,sp3 S in ring,Anisotropic
+N.aa_1,107,867,974,109,N.2,N,sp2,"[1,2]","[2,3]",Primary amine as aromatic substituent,Anisotropic
+C.oh_4,152,811,963,81,C.3,C,sp3,0,4,Tertiary alcohol,Isotropic
+S.2c_1,640,295,935,169,S.2,S,sp2,0,1,sp2 S coupled to C,Anisotropic
+C.3c_4,144,786,930,21,C.3,C,sp3,0,4,Quaternary C (bound to C only),Isotropic
+N.mih_3,559,330,889,133,N.am,N,sp2,0,3,Tertiary amidine N,Axial
+C.2r5_3,98,789,887,11,C.2,C,sp2,0,3,Non-aromatic sp2 C in 5-membered ring,Axial
+N.im_3,36,837,873,130,N.am,N,sp2,0,3,Tertiary imide N,Axial
+C.et_4,346,483,829,75,C.3,C,sp3,0,4,Ether C,Isotropic
+N.aa_3,168,628,796,111,N.2,N,sp2,0,3,Tertiary amine as aromatic substituent,Axial
+C.3r3_3,127,620,747,30,C.3,C,sp3,1,4,sp3 C in 3-membered ring,Axial
+S.o3n0_4,82,613,695,177,S.3,S,sp3,0,4,sp3 S coupled to O's and 1 C,Isotropic
+C.2r5_2,294,298,592,10,C.2,C,sp2,1,3,Non-aromatic sp2 C in 5-membered ring,Anisotropic
+C.3r4_2,81,494,575,35,C.3,C,sp3,2,4,sp3 C in 3-membered ring,Anisotropic
+C.3r4x_2,107,447,554,37,C.3,C,sp3,2,4,sp3 C in 4-membered ring with hetero-atom neighbor,Anisotropic
+N.ar6p_2,227,308,535,124,N.ar,N,sp2,1,3,"Unsubstituted, charged N in 6-membered aromatic ring",Anisotropic
+C.3r5_4,65,425,490,42,C.3,C,sp3,0,4,sp3 C in 5-membered ring,Isotropic
+I_1,3,484,487,88,I,I,sp3,0,1,Iodine group,Axial
+N.ar6n_2,29,456,485,122,N.ar,N,sp2,0,2,"Unsubstituted, uncharged N in 6-membered aromatic ring next to N",Anisotropic
+Na,472,0,472,145,Na,Na,/,/,/,Na ion,Isotropic
+S.2p_1,31,424,455,170,S.2,S,sp2,0,1,sp2 S coupled to P,Axial
+C.am_2,269,180,449,56,C.2,C,sp2,1,3,Carbonyl C in terminal amide,Anisotropic
+C.3n_4,98,315,413,28,C.3,C,sp3,0,4,sp3 C bound to N + 3 other heavy atoms,Isotropic
+C.3r4x_3,227,185,412,38,C.3,C,sp3,1,4,sp3 C in 4-membered ring with hetero-atom neighbor,Axial
+N.4_4,102,308,410,108,N.4,N,sp3,0,4,"Quaternary amine, charged",Isotropic
+N.2n_2,50,311,361,97,N.2,N,sp2,"[0,1]","[2,3]",sp2 bound to N and C,Anisotropic
+O.3s_2,147,189,336,158,O.3,O,sp3,0,2,Connecting O between sulphates,Anisotropic
+C.3r4_3,66,262,328,36,C.3,C,sp3,1,4,sp3 C in 3-membered ring,Axial
+C.3hal_3,12,294,306,24,C.3,C,sp3,1,4,sp3 C bound to halogen,Axial
+K,284,0,284,89,K,K,/,/,/,K ion,Isotropic
+N.ar6np_3,8,257,265,123,N.ar,N,sp2,0,3,"Substituted, charged N in 6-membered aromatic ring next to N",Axial
+C.co2_2,262,0,262,69,C.co2,C,sp,0,2,CO2,Isotropic
+N.3n_2,147,89,236,102,N.3,N,sp3,1,3,sp3 N bound to N and C,Anisotropic
+Ni,227,0,227,146,Ni,Ni,/,/,/,Ni ion,Isotropic
+C.3s_3,15,170,185,54,C.3,C,sp3,1,4,sp3 C coupled to S,Axial
+C.3hal_2,9,163,172,23,C.3,C,sp3,2,4,sp3 C bound to halogen,Anisotropic
+N.3n_1,97,52,149,101,N.3,N,sp3,2,3,sp3 N bound to N,Axial
+N.3n_3,133,16,149,103,N.3,N,sp3,0,3,sp3 N bound to N and 2 C's,Axial
+C.3r4x_4,73,48,121,39,C.3,C,sp3,0,4,sp3 C in 4-membered ring with hetero-atom neighbor,Isotropic
+Cd,120,0,120,83,Cd,Cd,/,/,/,Cd ion,Isotropic
+C.3r3_4,6,96,102,31,C.3,C,sp3,0,4,sp3 C in 3-membered ring,Isotropic
+N.3c_3,13,62,75,100,N.3,N,sp3,0,3,"Tertiary amine, uncharged",Axial
+Cu,49,0,49,85,Cu,Cu,/,/,/,Cu ion,Isotropic
+C.3s_4,0,42,42,55,C.3,C,sp3,0,4,sp3 C coupled to S,Isotropic
+O.2o_1,17,0,17,148,O.2,O,sp2,0,1,Oxygen,Axial
+S.o3n1_4,0,14,14,178,S.3,S,sp3,0,4,sp3 S coupled to O's and 1 N,Isotropic
+N.2c_3,3,10,13,96,N.2,N,sp2,0,3,"sp2 N, tertiary, partial positive charge",Axial
+N.sa3_2,0,10,10,143,N.2,N,sp2,1,3,Secondary sulfonamide N,Anisotropic
+S.o2n1_4,0,5,5,176,S.3,S,sp3,0,4,Sulphonamide S,Isotropic
+N.sa2_2,0,3,3,141,N.2,N,sp2,1,3,Secondary sulfonamide N,Anisotropic
+N.sa2_1,0,2,2,140,N.2,N,sp2,1,3,Primary sulfonamide N,Axial
 N.sa3_3,0,1,1,144,N.2,N,sp2,1,3,Tertiary sulfonamide N,Axial
 C.3hal_1,1,0,1,22,C.3,C,sp3,3,4,sp3 C bound to halogen,Axial
