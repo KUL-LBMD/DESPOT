@@ -41,9 +41,11 @@ This script will download:
 
 ### Inference
 
+#### 1. Pose scoring
+
 To score a protein-ligand complex:
 ```bash
-python scripts/score_complex.py -p 1e66_protein.mol2 -l 1e66_decoys.mol2 -o test.csv -m full --bfac --database CROWN_train  # Options are: [CROWN_train, CROWN_Xtal, CROWN_leaky]
+python scripts/score_complex.py -p 6hdt_receptor.mol2 -l 6hdt_ligand.mol2 -o test_score.csv -m full --database CROWN_leaky --bfac
 ```
 
 **Options:**
@@ -51,21 +53,40 @@ python scripts/score_complex.py -p 1e66_protein.mol2 -l 1e66_decoys.mol2 -o test
 - `-p` / `--protein`: Path (relative or full) to receptor .mol2 file **[REQUIRED]**
 - `-l` / `--ligand`: Path (relative or full) to ligand (multi-)mol2 file **[REQUIRED]**
 - `-o` / `--outpath`: Path (relative or full) to output CSV file **[REQUIRED]**
-- `-m` / `--mode`: Which DESPOT mode to use for inference. Choose between `{full, iso, ds}`. Default: `full` **[OPTIONAL]**
+- `-m` / `--mode`: Which DESPOT mode to use for inference. Choose between `{full, ds}`. Default: `full` **[OPTIONAL]**
 - `--bfac`: Set this flag to create a subdirectory that stores separate PDB files for each ligand pose, with atom-wise scores stored as B-factors **[OPTIONAL]**
+- `--database`: Which training source to use for inference. Choose between [CROWN_train, CROWN_Xtal, CROWN_leaky]. Default: CROWN_train **[OPTIONAL]**
 
-**Example Output (`test.csv`):**
+**Example Output (`test_score.csv`):**
 ```csv
 ligand,score
-1e66_404,-143.505772
-1e66_505,-43.276867
-1e66_862,-62.781874
-1e66_247,-177.097640
-1e66_591,38.887140
-1e66_661,-41.130724
+1.E,-428.293167
 ```
 
 The output CSV contains ligand identifiers (parsed from the mol2 file) and their corresponding binding scores. Lower (more negative) scores indicate stronger predicted binding affinity.
+
+#### 2. MIF generation
+
+To create a MIF channel map:
+```bash
+python scripts/make_voxel_channel.py --protein 6hdt_receptor.mol2 --pocket 6hdt_pocket.pqr --channel O.co2_1 --output test_voxel.pdb --database CROWN_leaky
+```
+
+**Options:**
+
+- `--protein`: Path (relative or full) to receptor .mol2 file **[REQUIRED]**
+- `--pocket`: Path (relative or full) to FPocket .pqr file (used for pocket definition) **[REQUIRED]**
+- `--channel`: Name of ligand atom type you want the MIF channel from (e.g., O.co2_1). See supplementary information of paper for full atom type definitions. **[REQUIRED]**
+- `--output`: Path (relative or full) to output .pdb file **[REQUIRED]**
+- `--database`: Which training source to use for inference. Choose between [CROWN_train, CROWN_Xtal, CROWN_leaky]. Default: CROWN_train **[OPTIONAL]**
+
+#### 3. Plotting interaction types
+A Jupyter notebook is provided for plotting pairwise interactions.
+The function *plot_anisotropy* takes 3 arguments:
+
+- `p_types_list`: L protein atom types. See supplementary information of paper for full atom type definitions.
+- `l_types_list`: L ligand atom types. See supplementary information of paper for full atom type definitions.
+- `distance_list`: L distances used for creating Mollweide projections.
 
 ### Training
 
@@ -86,12 +107,17 @@ python scripts/count_interactions.py --database CROWN_train  # Options are: [CRO
 python scripts/train_despot.py --database CROWN_train  # Options are: [CROWN_train, CROWN_Xtal, CROWN_leaky]
 ```
 
-#### 3. Benchmark and Evaluate
+#### 3. Benchmarking
 
 Evaluate trained models on the CASF benchmark set and generate performance plots:
 ```bash
 python scripts/benchmark_casf.py --database CROWN_train  # Options are: [CROWN_train, CROWN_Xtal, CROWN_leaky]
 ```
+
+## CROWN Dataset
+
+The CROWN dataset used for training and evaluation is maintained separately.
+More information, updates, and access instructions are available on the official website:
 
 ## Citation
 
@@ -102,7 +128,13 @@ If you use DESPOT in your research, please cite:
 
 ## License
 
-This dataset is licensed under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+### DESPOT
+
+This project is licensed under the MIT License.
+
+### CROWN Dataset
+
+The CROWN dataset is licensed under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 
 ## Contact
 
