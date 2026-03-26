@@ -24,7 +24,7 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_druglike_min', 'despot_ds_crown_druglike_min', 'despot_crown_druglike', 'despot_ds_crown_druglike', 'despot_crown_leaky', 'despot_ds_crown_leaky',
+    'despot_crown_train', 'despot_ds_crown_train', 'despot_crown_xtal', 'despot_ds_crown_xtal', 'despot_crown_leaky', 'despot_ds_crown_leaky',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina',
