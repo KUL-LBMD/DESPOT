@@ -2,6 +2,10 @@
 
 Direction-Enhanced Scoring POTentials: anisotropic knowledge-based potential for scoring protein-ligand interactions.
 
+## About
+
+Knowledge-based potentials (KBPs) are widely used to score protein–ligand interactions, but existing methods are isotropic — they capture only distance dependencies and ignore the directional preferences that govern molecular recognition. DESPOT instead naturally supports both directional scoring and steric exclusion, making it a tool that can be used for both post-scoring of docking results, as well as ligand-independent generation of molecular interaction fields. On the CASF-2016 benchmark, DESPOT substantially outperforms isotropic KBPs across all pose-discrimination and virtual screening tasks.
+
 ## Installation
 
 ### 1. Clone the Repository
