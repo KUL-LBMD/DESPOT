@@ -27,15 +27,14 @@ pip install -e .
 
 ### 4. Download Models and Datasets
 
-Download the pre-trained models and training/test datasets:
+Download the pre-trained DESPOT models and test datasets:
 ```bash
 bash download_data.sh
 ```
 
 This script will download:
 - Pre-trained DESPOT models
-- CROWN training dataset
-- CASF benchmark test dataset
+- CASF benchmark test set
 
 ## Usage
 
