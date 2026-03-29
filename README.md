@@ -122,6 +122,8 @@ python scripts/benchmark_casf.py --database CROWN_train  # Options are: [CROWN_t
 The CROWN dataset used for training and evaluation is maintained separately.
 More information, updates, and access instructions are available on the official website:
 
+[https://crown.lbmd.be/](https://crown.lbmd.be/)
+
 ## Citation
 
 If you use DESPOT in your research, please cite:
