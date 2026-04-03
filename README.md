@@ -103,7 +103,9 @@ DESPOT is trained on the [CROWN](https://github.com/KUL-LBMD/CROWN) (Curated Rep
 
 If you use DESPOT in your work, please cite:
 
-> *Manuscript in preparation.*
+DESPOT: Direction-Enhanced Scoring POTentials
+Robin Poelmans, Bence Bruncsics, Adam Arany, Wout Van Eynde, Ahmed Shemy, Yves Moreau, Arnout RD Voet
+bioRxiv 2026.03.31.714140; doi: [https://doi.org/10.64898/2026.03.31.714140](https://doi.org/10.64898/2026.03.31.714140)
 
 ## License
 
