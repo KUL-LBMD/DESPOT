@@ -51,14 +51,14 @@ CATEGORY_COLORS = {
 }
 
 SCORE_CATEGORY = {
-    'DESPOT-min': 'consensus',
+    'DESPOT-leaky': 'consensus',
     'ΔVinaRF20': 'consensus',
     'ChemPLP': 'consensus',
     'GlideScore-SP': 'consensus',
     # ERC combinations
-    'DESPOT-min + ΔVinaRF20 (ERC)': 'consensus',
-    'DESPOT-min + ΔVinaRF20 + ChemPLP (ERC)': 'consensus',
-    'DESPOT-min + ΔVinaRF20 + ChemPLP + GlideScore-SP (ERC)': 'consensus',
+    'DESPOT-leaky + ΔVinaRF20 (ERC)': 'consensus',
+    'DESPOT-leaky + ΔVinaRF20 + ChemPLP (ERC)': 'consensus',
+    'DESPOT-leaky + ΔVinaRF20 + ChemPLP + GlideScore-SP (ERC)': 'consensus',
 }
 
 # ============================================================================

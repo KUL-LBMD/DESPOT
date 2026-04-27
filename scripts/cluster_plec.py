@@ -63,3 +63,13 @@ if __name__ == '__main__':
 
     with open('plec_cluster_dict_50.json', 'w') as f:
         json.dump(plec_cluster_dict, f, cls=NumpyEncoder)
+
+    plec_cluster_dict = build_cluster_dict(sim_df, 0.70)
+
+    with open('plec_cluster_dict_70.json', 'w') as f:
+        json.dump(plec_cluster_dict, f, cls=NumpyEncoder)
+
+    plec_cluster_dict = build_cluster_dict(sim_df, 0.90)
+
+    with open('plec_cluster_dict_90.json', 'w') as f:
+        json.dump(plec_cluster_dict, f, cls=NumpyEncoder)

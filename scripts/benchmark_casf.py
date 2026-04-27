@@ -65,9 +65,9 @@ SCORE_CATEGORY = {
 # ============================================================================
 
 #ERC_PARTNERS = ['dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
-ERC_PARTNERS = []
+ERC_PARTNERS = ['chemscore', 'deltavina', 'glide', 'chemplp']
 ERC_CONFIG = {
-    'base': 'despot',
+    'base': 'despot_crown_leaky',
     'partner_combos': ERC_PARTNERS,
     'sigma_frac': 0.05,
 }
@@ -104,9 +104,9 @@ if __name__ == '__main__':
     DATABASE = args.database
 
     ### Step 1: run DESPOT on all CASF entries and store data ###
-    run_scoring(DATABASE)
-    run_docking(DATABASE)
-    run_screening(n_jobs=8, database = DATABASE)
+    #run_scoring(DATABASE)
+    #run_docking(DATABASE)
+    #run_screening(n_jobs=8, database = DATABASE)
 
     ### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
 
