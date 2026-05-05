@@ -21,7 +21,7 @@ pip install -e .
 Download the pre-trained DESPOT models and CASF benchmark test set:
 
 ```bash
-bash download_data.sh
+bash download_dataset.sh
 ```
 
 ## Usage
