@@ -40,6 +40,43 @@ def parse_arguments():
 
 	return parser.parse_args()
 
+def make_pymol_session(receptor_path, bfac_dir, session_path):
+    """Write a PyMOL .pml script that builds the visualization and saves a .pse.
+    Run headless:  pymol -cq <script>.pml
+    Or in the GUI: @<script>.pml
+    """
+    ligand_files = sorted(f for f in os.listdir(bfac_dir) if f.endswith('.pdb'))
+    if not ligand_files:
+        print(f'No ligand PDBs found in {bfac_dir}; skipping PyMOL script.')
+        return
+
+    script_path  = session_path[:-4] + '.pml'
+    receptor_abs = os.path.abspath(receptor_path)
+    bfac_abs     = os.path.abspath(bfac_dir)
+    session_abs  = os.path.abspath(session_path)
+
+    lines = [f'load {receptor_abs}, receptor']
+    for pdb in ligand_files:
+        obj = os.path.splitext(pdb)[0]
+        lines.append(f'load {os.path.join(bfac_abs, pdb)}, {obj}')
+        lines.append(f'group ligands, {obj}, add')
+
+    lines += [
+        'hide everything',
+        'show sticks, ligands',
+        'spectrum b, blue_white_red, ligands, minimum=-20, maximum=20',
+        'show lines, receptor within 6 of ligands',
+        'zoom ligands, buffer=4',
+        f'save {session_abs}',
+    ]
+
+    with open(script_path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+    print(f'Wrote PyMOL script to {script_path}')
+    print(f'  Headless: pymol -cq {script_path}   ->  {session_abs}')
+    print(f'  In GUI:   @{script_path}')
+
 if __name__ == '__main__':
 	args = parse_arguments()
 	DATABASE = args.database
@@ -101,3 +138,8 @@ if __name__ == '__main__':
 		})
 
 	df.to_csv(args.outpath, index = False, float_format = '%.6f')
+
+	# PyMOL session for visual inspection of the per-atom DESPOT scores
+	if args.bfac:
+		session_path = args.outpath[:-4] + '.pse'
+		make_pymol_session(args.protein, bfac_dir, session_path)

@@ -2,12 +2,37 @@
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 ZENODO_RECORD="19218614"
-ARCHIVE_URL="https://zenodo.org/api/records/${ZENODO_RECORD}/files-archive"
-ARCHIVE_NAME="despot_zenodo.zip"
- 
-# Default output directory = repo root (script assumes it lives in the repo)
+BASE_URL="https://zenodo.org/api/records/${ZENODO_RECORD}/files"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUTPUT_DIR="${1:-.}"  # Pass a custom output dir as first arg, or default to cwd
+
+# ─── Argument parsing ────────────────────────────────────────────────────────
+WITH_CASF=0
+OUTPUT_DIR="."
+
+usage() {
+    cat <<EOF
+Usage: $0 [--with-casf] [OUTPUT_DIR]
+
+Options:
+  --with-casf    Also download the CASF-2016 benchmark (large; slow).
+                 Off by default to save bandwidth and disk space.
+  -h, --help     Show this help message and exit.
+
+Arguments:
+  OUTPUT_DIR     Target directory (default: current working directory).
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --with-casf) WITH_CASF=1; shift ;;
+        -h|--help)   usage; exit 0 ;;
+        --) shift; break ;;
+        -*) echo "Unknown option: $1" >&2; usage; exit 1 ;;
+        *)  OUTPUT_DIR="$1"; shift ;;
+    esac
+done
 
 # ─── Target subdirectories (adjust these to match your repo layout) ──────────
 DIR_DATA="${OUTPUT_DIR}/data"
@@ -16,9 +41,9 @@ DIR_MODELS="${OUTPUT_DIR}/data/potentials"
 DIR_CASF="${OUTPUT_DIR}/data"
 
 # ─── MD5 checksums from Zenodo ───────────────────────────────────────────────
+# Core files (always downloaded)
 declare -A CHECKSUMS=(
     ["atom_type_counts.csv"]="6e55bab544fb69221c5603f617355643"
-    ["casf_2016.tar.gz"]="daa9cb4088844c28d179f3c1e5e5be3c"
     ["casf_pdb_ids.txt"]="67f958b184c12862481268ba24fb080a"
     ["despot_counts_crown_leaky.npz"]="9e0900a27fd254a065fbc7bc0f10aebe"
     ["despot_counts_crown_train.npz"]="375907b82a312b0740e02deddad5d7cb"
@@ -31,11 +56,16 @@ declare -A CHECKSUMS=(
     ["despot_scores_crown_xtal.npz"]="4d2d4f80d536001aee0e80a7a40e95c9"
 )
 
+# Optional benchmark
+CASF_FILE="casf_2016.tar.gz"
+CASF_MD5="daa9cb4088844c28d179f3c1e5e5be3c"
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 info()  { echo -e "\033[1;34m[INFO]\033[0m  $*"; }
 ok()    { echo -e "\033[1;32m[OK]\033[0m    $*"; }
+warn()  { echo -e "\033[1;33m[WARN]\033[0m  $*"; }
 fail()  { echo -e "\033[1;31m[FAIL]\033[0m  $*"; exit 1; }
- 
+
 verify_md5() {
     local file="$1" expected="$2"
     local actual
@@ -47,53 +77,58 @@ verify_md5() {
     fi
 }
 
-# ─── Step 1: Download the archive ───────────────────────────────────────────
+download_and_verify() {
+    local filename="$1" expected_md5="$2" dest="$3"
+    info "Downloading $filename..."
+    wget --progress=bar:force:noscroll -O "$dest" "${BASE_URL}/${filename}/content" \
+        || fail "Download failed for $filename"
+    verify_md5 "$dest" "$expected_md5"
+}
+
+# ─── Step 1: Setup ──────────────────────────────────────────────────────────
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
- 
-info "Downloading archive from Zenodo record ${ZENODO_RECORD}..."
-wget --progress=bar:force:noscroll -O "${TMPDIR}/${ARCHIVE_NAME}" "$ARCHIVE_URL"
-ok "Download complete."
- 
-# ─── Step 2: Extract the zip ────────────────────────────────────────────────
-info "Extracting archive..."
-unzip -o "${TMPDIR}/${ARCHIVE_NAME}" -d "${TMPDIR}/extracted"
-ok "Extraction complete."
- 
-# ─── Step 3: Verify checksums ───────────────────────────────────────────────
-info "Verifying file integrity..."
-for file in "${!CHECKSUMS[@]}"; do
-    filepath="${TMPDIR}/extracted/${file}"
-    if [[ -f "$filepath" ]]; then
-        verify_md5 "$filepath" "${CHECKSUMS[$file]}"
-    else
-        fail "Expected file not found: $file"
-    fi
-done
-ok "All checksums verified."
 
-# ─── Step 4: Create target directories ──────────────────────────────────────
 info "Creating directory structure..."
-mkdir -p "$DIR_MODELS" "$DIR_METADATA/"
+mkdir -p "$DIR_MODELS" "$DIR_METADATA"
 
-# ─── Step 5: Move files to their target locations ───────────────────────────
-SRC="${TMPDIR}/extracted"
- 
+# ─── Step 2: Download core files individually ───────────────────────────────
+info "Downloading files from Zenodo record ${ZENODO_RECORD}..."
+for file in "${!CHECKSUMS[@]}"; do
+    download_and_verify "$file" "${CHECKSUMS[$file]}" "${TMPDIR}/${file}"
+done
+
+# ─── Step 3: Optionally download CASF-2016 ──────────────────────────────────
+if [[ "$WITH_CASF" -eq 1 ]]; then
+    download_and_verify "$CASF_FILE" "$CASF_MD5" "${TMPDIR}/${CASF_FILE}"
+else
+    warn "Skipping ${CASF_FILE} (pass --with-casf to include it)"
+fi
+
+ok "All requested files downloaded and verified."
+
+# ─── Step 4: Move files to their target locations ───────────────────────────
+SRC="$TMPDIR"
+
 info "Installing files..."
- 
-# Definition / metadata files → data/
+
+# Definition / metadata files → data/metadata/
 mv "$SRC/atom_type_counts.csv" "$DIR_METADATA/"
 mv "$SRC/casf_pdb_ids.txt"     "$DIR_METADATA/"
 
-# Model files (counts + scores) → data/models/
+# Model files (counts + scores) → data/potentials/
 mv "$SRC"/despot_counts_*.npz    "$DIR_MODELS/"
 mv "$SRC"/despot_scores_*.npz    "$DIR_MODELS/"
 mv "$SRC"/despot_ds_scores_*.npz "$DIR_MODELS/"
 
-# CASF-2016 benchmark → extract into data/casf/
-mv "$SRC/casf_2016.tar.gz" "${OUTPUT_DIR}/data/"
+# CASF-2016 benchmark → data/
+if [[ "$WITH_CASF" -eq 1 ]]; then
+    mv "$SRC/$CASF_FILE" "${DIR_CASF}/"
+fi
+
 ok "All files installed."
 
+# ─── Summary ────────────────────────────────────────────────────────────────
 echo ""
 info "Installation summary:"
 echo "  ${DIR_METADATA}/atom_type_counts.csv"
@@ -101,4 +136,8 @@ echo "  ${DIR_METADATA}/casf_pdb_ids.txt"
 echo "  ${DIR_MODELS}/despot_counts_*.npz       (3 files)"
 echo "  ${DIR_MODELS}/despot_scores_*.npz       (3 files)"
 echo "  ${DIR_MODELS}/despot_ds_scores_*.npz    (3 files)"
-echo "  ${DIR_CASF}/                            (extracted benchmark)"
+if [[ "$WITH_CASF" -eq 1 ]]; then
+    echo "  ${DIR_CASF}/${CASF_FILE}"
+else
+    echo "  (CASF-2016 benchmark skipped — re-run with --with-casf to fetch it)"
+fi
