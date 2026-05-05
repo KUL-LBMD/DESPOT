@@ -8,6 +8,7 @@ import argparse
 import pandas as pd
 import os
 import tempfile
+import subprocess
 from tqdm import tqdm
 
 # This variable controls number of ligands to score in parallel.
@@ -74,8 +75,7 @@ def make_pymol_session(receptor_path, bfac_dir, session_path):
         f.write('\n'.join(lines) + '\n')
 
     print(f'Wrote PyMOL script to {script_path}')
-    print(f'  Headless: pymol -cq {script_path}   ->  {session_abs}')
-    print(f'  In GUI:   @{script_path}')
+    subprocess.run(['pymol', '-cq', script_path])
 
 if __name__ == '__main__':
 	args = parse_arguments()
