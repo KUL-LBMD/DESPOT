@@ -218,37 +218,6 @@ def generate_erc_figure(
     # Step 1b: Print requested statistics
     # -------------------------------------------------------------------------
  
-    despot_variants = ['GlideScore-SP', 'DESPOT + GlideScore-SP (ECR)']
- 
-    # Docking power: top-1, top-2, top-3
-    print("\n=== Docking Power (Success Rate) ===")
-    for variant in despot_variants:
-        if variant in dock_name_list_clean:
-            idx = dock_name_list_clean.index(variant)
-            print(f"  {variant}: Top-1={dock_top_arr[idx, 0]:.3f}, "
-                  f"Top-2={dock_top_arr[idx, 1]:.3f}, "
-                  f"Top-3={dock_top_arr[idx, 2]:.3f}")
- 
-    # Forward screening power: 1%, 2%, 5%
-    print("\n=== Forward Screening Power (Success Rate) ===")
-    for variant in despot_variants:
-        if variant in dock_name_list_clean:
-            idx = dock_name_list_clean.index(variant)
-            print(f"  {variant}: Top 1%={forward_top_arr[idx, 0]:.3f}, "
-                  f"Top 2%={forward_top_arr[idx, 1]:.3f}, "
-                  f"Top 5%={forward_top_arr[idx, 2]:.3f}")
- 
-    # Enrichment factor p-values between DESPOT and DESPOT-DS
-    print("\n=== Enrichment Factor: DESPOT vs DESPOT-Xtal p-values ===")
-    ef_labels = ['EF@1%', 'EF@2%', 'EF@5%']
-    despot_score = 'glide_score'
-    despot_ds_score = 'despot_crown_druglike_min_erc_glide_score'
-    for ef_label, pvals in zip(ef_labels, pvals_ef):
-        print(pvals.columns)
-        if despot_score in pvals.index and despot_ds_score in pvals.columns:
-            p = pvals.loc[despot_score, despot_ds_score]
-            print(f"  {ef_label}: p={p}")
-
     # -------------------------------------------------------------------------
     # Create figure: 3 rows
     # -------------------------------------------------------------------------

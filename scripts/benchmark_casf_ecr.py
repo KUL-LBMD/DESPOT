@@ -12,7 +12,8 @@ from src.casf.metrics import (
     get_scoring_values, get_ranking_values, get_docking_values,
     get_screening_values, get_enrichment_factors,
 )
-from src.casf.plot import generate_combined_figure
+
+from src.casf.plot_ecr import generate_erc_figure
 
 import numpy as np
 import pandas as pd
@@ -24,15 +25,17 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_train', 'dsx', 'asp', 'autodockvina', 'drugscore_csd',
-    'drugscore2018', 'glide', 'pmf', 'chemscore'
+    'despot_crown_train',
+    'autodockvina',
+    'drugscore2018', 'glide', 'gold', 'chemscore',
+    'chemplp', 'deltavina',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT',
-    'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
-    'DrugScore2018', 'GlideScore-SP', 'PMF04',
-    'ChemScore'
+    'DESPOT-train',
+    'AutoDockVina',
+    'DrugScore2018', 'GlideScore-SP', 'GoldScore',
+    'ChemScore', 'ChemPLP', 'ΔVinaRF20',
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
@@ -63,34 +66,29 @@ SCORE_CATEGORY = {
 # ============================================================================
 
 #ERC_PARTNERS = ['dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
-ERC_PARTNERS = []
-ERC_CONFIG = {
-    'base': 'despot',
-    'partner_combos': ERC_PARTNERS,
-    'sigma_frac': 0.05,
-}
 
-# Clean display names for ERC combinations
-ERC_PARTNER_CLEAN = {k: NAME_MAP[k] for k in ERC_PARTNERS}
-
-ERC_NAMES_CLEAN = [
-    f'DESPOT+{ERC_PARTNER_CLEAN[p]} (ERC)'
-    for p in ERC_PARTNERS
+ERC_COMBOS = [
+    ['despot_crown_train', 'deltavina'],
+    ['despot_crown_train', 'chemplp'],
+    ['despot_crown_train', 'glide'],
+    ['despot_crown_train', 'deltavina', 'chemplp'],
+    ['despot_crown_train', 'deltavina', 'chemplp', 'glide'],
+    ['deltavina', 'chemplp', 'glide']
 ]
 
-Z_PARTNERS = []
-
-Z_CONFIG = {
-    'base': 'despot',
-    'partners': Z_PARTNERS,
+ERC_CONFIG = {
+    'partner_combos': ERC_COMBOS,
+    'sigma_frac': 0.05,
+    # drop 'base' — add_erc_columns derives it from partners[0]
 }
 
-# Clean display names for ERC combinations
-Z_PARTNER_CLEAN = {k: NAME_MAP[k] for k in Z_PARTNERS}
-
-Z_NAMES_CLEAN = [
-    f'DESPOT+{Z_PARTNER_CLEAN[p]} (Z)'
-    for p in Z_PARTNERS
+ERC_NAMES_CLEAN = [
+    'DESPOT-train + ΔVinaRF20 (ERC)',
+    'DESPOT-train + ChemPLP (ERC)',
+    'DESPOT-train + GlideScore-SP (ERC)',
+    'DESPOT-train + ΔVinaRF20 + ChemPLP (ERC)',
+    'DESPOT-train + ΔVinaRF20 + ChemPLP + GlideScore-SP (ERC)',
+    'ΔVinaRF20 + ChemPLP + GlideScore-SP (ERC)'
 ]
 
 if __name__ == '__main__':
@@ -102,14 +100,12 @@ if __name__ == '__main__':
     DATABASE = args.database
 
     ### Step 1: run DESPOT on all CASF entries and store data ###
-#    run_scoring(DATABASE)
- #   run_docking(DATABASE)
-  #  run_screening(n_jobs=8, database = DATABASE)
+    #run_scoring(DATABASE)
+    #run_docking(DATABASE)
+    #run_screening(n_jobs=8, database = DATABASE)
 
     ### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
 
-    score_df, score_names_ext = get_scoring_values(NAME_LIST, z_config = None)
-    rank_spearman_arr = get_ranking_values(NAME_LIST, z_config = None)
     dock_top_arr, dock_spearman_thresholds, dock_names_ext = get_docking_values(NAME_LIST, erc_config=ERC_CONFIG)
     screen_df, forward_top_arr, reverse_top_arr, screen_names_ext = get_screening_values(NAME_LIST, erc_config=ERC_CONFIG)
     ef_arr = get_enrichment_factors(screen_df, screen_names_ext)
@@ -118,19 +114,12 @@ if __name__ == '__main__':
 
     # Scoring & ranking use the original name lists (no ERC).
     # Docking, screening & enrichment use the extended lists.
-    generate_combined_figure(
-        'casf_combined.pdf',
-        # scoring / ranking (rows 1-2 left panels)
-        score_name_list = NAME_LIST,
-        score_name_list_clean=NAME_LIST_CLEAN,
-        score_df=score_df,
-        spearman_arr=rank_spearman_arr,
-        # docking (row 2)
+    generate_erc_figure(
+        'casf_erc.pdf',
         dock_name_list=dock_names_ext,
         dock_name_list_clean=NAME_LIST_CLEAN + ERC_NAMES_CLEAN,
         dock_top_arr=dock_top_arr,
         dock_spearman_thresholds=dock_spearman_thresholds,
-        # screening & enrichment (rows 3-4)
         forward_top_arr=forward_top_arr,
         reverse_top_arr=reverse_top_arr,
         ef_arr=ef_arr,

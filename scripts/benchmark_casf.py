@@ -65,7 +65,7 @@ SCORE_CATEGORY = {
 # ============================================================================
 
 #ERC_PARTNERS = ['dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
-ERC_PARTNERS = ['chemscore', 'deltavina', 'glide', 'chemplp']
+ERC_PARTNERS = []
 ERC_CONFIG = {
     'base': 'despot_crown_leaky',
     'partner_combos': ERC_PARTNERS,

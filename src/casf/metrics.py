@@ -1,5 +1,5 @@
 from src.config import DATA_DIR
-from src.casf.ecr import add_erc_columns
+from src.casf.erc import add_erc_columns
 
 import numpy as np
 import pandas as pd
@@ -108,7 +108,7 @@ def get_docking_values(name_list, erc_config=None):
             if idx_list:
                 real_idx = idx_list[0]
             else:
-                real_idx = 4
+                real_idx = 4 # any value >= 3 fails all top-N checks
 
             if real_idx < 3:
                 top_arr[i, 2] += 1 / n_targets
