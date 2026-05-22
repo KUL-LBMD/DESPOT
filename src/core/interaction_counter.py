@@ -44,12 +44,12 @@ class DESPOT_Counter:
 
         # Set types lists for ligand atoms and protein atoms
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
+        prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'prot_types.csv')
+        lig_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'lig_types.csv')
 
         self.types_list_1d = (
-            counts_df.loc[
-                (counts_df['local_reference_frame'] == 'Isotropic') &
-                (counts_df['protein_count'] > 1000),
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Isotropic'),
                 'atom_type'
             ]
             .dropna()
@@ -58,9 +58,8 @@ class DESPOT_Counter:
         )
 
         self.types_list_2d = (
-            counts_df.loc[
-                (counts_df['local_reference_frame'] == 'Axial') &
-                (counts_df['protein_count'] > 1000),
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Axial'),
                 'atom_type'
             ]
             .dropna()
@@ -69,9 +68,8 @@ class DESPOT_Counter:
         )
 
         self.types_list_3d = (
-            counts_df.loc[
-                (counts_df['local_reference_frame'] == 'Anisotropic') &
-                (counts_df['protein_count'] > 1000),
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Anisotropic'),
                 'atom_type'
             ]
             .dropna()
@@ -80,10 +78,7 @@ class DESPOT_Counter:
         )
 
         self.ligand_types_list = (
-            counts_df.loc[
-                (counts_df['ligand_count'] > 500),
-                'atom_type'
-            ]
+            lig_counts_df['atom_type']
             .dropna()
             .unique()
             .tolist()
@@ -119,7 +114,7 @@ class DESPOT_Counter:
         """
 
         # Extract data as numpy arrays to avoid repeated DataFrame access
-        prot_types = prot_df['atom_type'].values
+        prot_types = prot_df['prot_type'].values
         prot_hybridizations = prot_df['hybridization'].values
         prot_neighbors = prot_df['heavy_neighbors'].values
         prot_coords = prot_df[['x', 'y', 'z']].values
@@ -127,8 +122,8 @@ class DESPOT_Counter:
         v2_arr = prot_df[['v2_x', 'v2_y', 'v2_z']].values
         v3_arr = prot_df[['v3_x', 'v3_y', 'v3_z']].values
 
-        lig_subset = lig_df[lig_df['atom_type'].isin(self.ligand_types_list)]
-        lig_types = lig_subset['atom_type'].values
+        lig_subset = lig_df[lig_df['lig_type'].isin(self.ligand_types_list)]
+        lig_types = lig_subset['lig_type'].values
         lig_coords = lig_subset[['x', 'y', 'z']].values
 
         # Build KDTree
@@ -164,6 +159,11 @@ class DESPOT_Counter:
 
                     if not np.isnan(v1[0]): 
                         cos_theta = np.dot(int_vector, v1) / np.linalg.norm(int_vector)
+
+                        if np.isnan(cos_theta):
+                            print(f'v1: {v1} - int_vector: {int_vector}')
+                            continue
+
                         theta = np.degrees(np.arccos(np.clip(cos_theta, -1.0, 1.0)))
                         theta = np.clip(theta, 0.01, 179.99)
                         theta_idx = int(theta / 3)

@@ -1,28 +1,46 @@
 from src.config import DATA_DIR
 from src.core.interaction_counter import DESPOT_Counter
-from src.core.score_builder import DESPOT_Builder, DESPOT_DS_Builder
+from src.core.score_builder import DESPOT_Builder, DESPOT_DS_Builder, DESPOT_Builder_old
 import argparse
 
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky'], default = 'CROWN_train', help = 'Data source to use')
+	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
 	args = parser.parse_args()
 
 	DATABASE = args.database
 
 	# Build scores
 	print('Building DESPOT')
-	builder = DESPOT_Builder(DATABASE)
-	builder.blur_counts()
-	builder.counts_to_prob()
-	builder.ref_probs()
-	builder.inverse_boltzmann()
+
+	#for smooth_mode in ['Gaussian', 'SH']:
+
+	#	print(smooth_mode)
+	#	builder = DESPOT_Builder(database = DATABASE, ref_mode = 'uniform', smooth_mode = smooth_mode)
+	#	rho = builder.blur_counts()
+	#	prob, cond_prob = builder.counts_to_prob(rho)
+	#	del rho
+
+	#	for ref_mode in ['marginal', 'uniform']:
+	#		print(f'\n=== ref_mode = {ref_mode!r} ===')
+	#		builder.ref_mode = ref_mode
+	#		print('Computing reference probability')
+	#		ref_prob = builder.ref_probs(prob, cond_prob)
+	#		print('Running inverse Boltzmann')
+	#		builder.inverse_boltzmann(cond_prob, ref_prob)
 
 	print('Building DESPOT-DS')
 	builder = DESPOT_DS_Builder(DATABASE)
 	builder.blur_counts()
 	builder.counts_to_prob()
 	builder.cluster_probs()
+	builder.ref_probs()
+	builder.inverse_boltzmann()
+
+	print('Building DESPOT-old')
+	builder = DESPOT_Builder_old(DATABASE)
+	builder.blur_counts()
+	builder.counts_to_prob()
 	builder.ref_probs()
 	builder.inverse_boltzmann()

@@ -25,17 +25,17 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_train',
+    'despot_crown_leaky',
     'autodockvina',
     'drugscore2018', 'glide', 'gold', 'chemscore',
-    'chemplp', 'deltavina',
+    'chemplp', 'deltavina', 'korp_pl'
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT-train',
+    'DESPOT-leaky',
     'AutoDockVina',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore',
-    'ChemScore', 'ChemPLP', 'ΔVinaRF20',
+    'ChemScore', 'ChemPLP', 'ΔVinaRF20', 'KORP-PL'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
@@ -58,7 +58,8 @@ SCORE_CATEGORY = {
     'ChemScore': 'empirical',
     'ChemPLP': 'empirical',
     'GBVI-WSA-dG': 'physical',
-    'ΔVinaRF20': 'empirical'
+    'ΔVinaRF20': 'empirical',
+    'KORP-PL': 'kbp'
 }
 
 # ============================================================================
@@ -68,12 +69,10 @@ SCORE_CATEGORY = {
 #ERC_PARTNERS = ['dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
 
 ERC_COMBOS = [
-    ['despot_crown_train', 'deltavina'],
-    ['despot_crown_train', 'chemplp'],
-    ['despot_crown_train', 'glide'],
-    ['despot_crown_train', 'deltavina', 'chemplp'],
-    ['despot_crown_train', 'deltavina', 'chemplp', 'glide'],
-    ['deltavina', 'chemplp', 'glide']
+    ['despot_crown_leaky', 'deltavina'],
+    ['despot_crown_leaky', 'chemplp'],
+    ['despot_crown_leaky', 'glide'],
+    ['despot_crown_leaky', 'korp_pl']
 ]
 
 ERC_CONFIG = {
@@ -83,12 +82,10 @@ ERC_CONFIG = {
 }
 
 ERC_NAMES_CLEAN = [
-    'DESPOT-train + ΔVinaRF20 (ERC)',
-    'DESPOT-train + ChemPLP (ERC)',
-    'DESPOT-train + GlideScore-SP (ERC)',
-    'DESPOT-train + ΔVinaRF20 + ChemPLP (ERC)',
-    'DESPOT-train + ΔVinaRF20 + ChemPLP + GlideScore-SP (ERC)',
-    'ΔVinaRF20 + ChemPLP + GlideScore-SP (ERC)'
+    'DESPOT + ΔVinaRF20 (ERC)',
+    'DESPOT + ChemPLP (ERC)',
+    'DESPOT + GlideScore-SP (ERC)',
+    'DESPOT + KORP-PL (ERC)'
 ]
 
 if __name__ == '__main__':

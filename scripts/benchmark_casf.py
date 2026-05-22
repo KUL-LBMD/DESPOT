@@ -24,17 +24,17 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_train', 'despot_ds_crown_train', 'despot_crown_xtal', 'despot_ds_crown_xtal', 'despot_crown_leaky', 'despot_ds_crown_leaky',
+    'despot_sh_uniform_pdbbind', 'despot_gaussian_uniform_pdbbind', 'despot_sh_marginal_pdbbind', 'despot_gaussian_old_pdbbind', 'despot_crown_leaky', 'despot_ds_crown_leaky',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
-    'chemplp', 'gbvi_wsa', 'deltavina',
+    'chemplp', 'gbvi_wsa', 'deltavina', 'korp_pl'
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'DESPOT-DS', 'DESPOT-Xtal', 'DESPOT-DS-Xtal', 'DESPOT-Leaky', 'DESPOT-DS-Leaky',
+    'DESPOT-PDBBind-SH', 'DESPOT-PDBBind-Gauss', 'PDBBind-marginal-SH', 'DESPOT-old-PDBBind', 'DESPOT-Leaky', 'DESPOT-DS-Leaky',
     'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
-    'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20',
+    'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20', 'KORP-PL'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
@@ -57,7 +57,8 @@ SCORE_CATEGORY = {
     'ChemScore': 'empirical',
     'ChemPLP': 'empirical',
     'GBVI-WSA-dG': 'physical',
-    'ΔVinaRF20': 'empirical'
+    'ΔVinaRF20': 'empirical',
+    'KORP-PL': 'kbp'
 }
 
 # ============================================================================
@@ -98,15 +99,15 @@ Z_NAMES_CLEAN = [
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky'], default = 'CROWN_train', help = 'Data source to use')
+    parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
     args = parser.parse_args()
 
     DATABASE = args.database
 
     ### Step 1: run DESPOT on all CASF entries and store data ###
-    #run_scoring(DATABASE)
-    #run_docking(DATABASE)
-    #run_screening(n_jobs=8, database = DATABASE)
+    run_scoring(DATABASE)
+    run_docking(DATABASE)
+    run_screening(n_jobs=8, database = DATABASE)
 
     ### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
 

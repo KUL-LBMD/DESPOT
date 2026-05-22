@@ -64,11 +64,11 @@ def count_atom_types_parallel(database: str) -> pd.DataFrame:
                 for future in done:
                     filename, prot_df, lig_df = future.result()
                     if prot_df is not None:
-                        for atype in prot_df["atom_type"].dropna():
+                        for atype in prot_df["prot_type"].dropna():
                             protein_counts[atype] += 1
 
                     if lig_df is not None:
-                        for atype in lig_df["atom_type"].dropna():
+                        for atype in lig_df["prot_type"].dropna():
                             ligand_counts[atype] += 1
 
                 pbar.update(1)
@@ -128,11 +128,11 @@ def count_atom_types(database: str) -> pd.DataFrame:
         filename, prot_df, lig_df = _convert_file(file, database)
 
         if prot_df is not None:
-            for atype in prot_df["atom_type"].dropna():
+            for atype in prot_df["prot_type"].dropna():
                 protein_counts[atype] += 1
 
         if lig_df is not None:
-            for atype in lig_df["atom_type"].dropna():
+            for atype in lig_df["prot_type"].dropna():
                 ligand_counts[atype] += 1
 
         print(i)
