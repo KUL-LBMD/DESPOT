@@ -237,7 +237,7 @@ class DESPOT_Builder:
         eps = 1e-12 # Lower bound, prevent 0 probabilities
         scores = cond_prob / ref_prob
         scores = np.clip(scores, eps, None)
-        scores = np.clip(-1 * np.log(scores), a_min = -5, a_max = 5)
+        scores = np.clip(-1 * np.log10(scores), a_min = -5, a_max = 5)
 
         # Split back by symmetry class
         i1 = len(self.types_list_1d)

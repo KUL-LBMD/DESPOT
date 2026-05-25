@@ -14,21 +14,21 @@ if __name__ == '__main__':
 	# Build scores
 	print('Building DESPOT')
 
-	#for smooth_mode in ['Gaussian', 'SH']:
+	for smooth_mode in ['Gaussian', 'SH']:
 
-	#	print(smooth_mode)
-	#	builder = DESPOT_Builder(database = DATABASE, ref_mode = 'uniform', smooth_mode = smooth_mode)
-	#	rho = builder.blur_counts()
-	#	prob, cond_prob = builder.counts_to_prob(rho)
-	#	del rho
+		print(smooth_mode)
+		builder = DESPOT_Builder(database = DATABASE, ref_mode = 'uniform', smooth_mode = smooth_mode)
+		rho = builder.blur_counts()
+		prob, cond_prob = builder.counts_to_prob(rho)
+		del rho
 
-	#	for ref_mode in ['marginal', 'uniform']:
-	#		print(f'\n=== ref_mode = {ref_mode!r} ===')
-	#		builder.ref_mode = ref_mode
-	#		print('Computing reference probability')
-	#		ref_prob = builder.ref_probs(prob, cond_prob)
-	#		print('Running inverse Boltzmann')
-	#		builder.inverse_boltzmann(cond_prob, ref_prob)
+		for ref_mode in ['marginal', 'uniform']:
+			print(f'\n=== ref_mode = {ref_mode!r} ===')
+			builder.ref_mode = ref_mode
+			print('Computing reference probability')
+			ref_prob = builder.ref_probs(prob, cond_prob)
+			print('Running inverse Boltzmann')
+			builder.inverse_boltzmann(cond_prob, ref_prob)
 
 	print('Building DESPOT-DS')
 	builder = DESPOT_DS_Builder(DATABASE)
