@@ -7,7 +7,7 @@ with DeltaVina, GlideScore, ChemPLP, and AutoDockVina.
 """
 
 from src.config import DATA_DIR
-from src.casf.run_korp import run_scoring, run_docking, run_screening
+from src.casf.run_despot import run_scoring, run_docking, run_screening
 from src.casf.metrics import (
     get_scoring_values, get_ranking_values, get_docking_values,
     get_screening_values, get_enrichment_factors,
@@ -24,17 +24,11 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_sh_uniform_pdbbind', 'despot_gaussian_uniform_pdbbind', 'despot_sh_marginal_pdbbind', 'despot_gaussian_old_pdbbind', 'despot_crown_leaky', 'despot_ds_crown_leaky',
-    'dsx', 'asp', 'autodockvina', 'drugscore_csd',
-    'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
-    'chemplp', 'gbvi_wsa', 'deltavina', 'korp_pl', 'korp_normed', 'korp'
+    'despot_pdbbind', 'korp_pdbbind', 'dfire_pdbbind', 'drugscore_pdbbind', 'dfire_iso_pdbbind', 'despot_ca_pdbbind', 'dfire_ca_pdbbind'
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT-PDBBind-SH', 'DESPOT-PDBBind-Gauss', 'PDBBind-marginal-SH', 'DESPOT-old-PDBBind', 'DESPOT-Leaky', 'DESPOT-DS-Leaky',
-    'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
-    'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
-    'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20', 'KORP-PL', 'bootleg-KORP-N', 'bootleg-KORP'
+    'DESPOT', 'KORP-PL', 'DFIRE', 'DRUGSCORE', 'DFIRE-ISO', 'DESPOT-CA', 'DFIRE-CA'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}

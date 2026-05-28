@@ -1,5 +1,5 @@
 from src.config import DATA_DIR
-from src.core_korp.interaction_counter import KORP_Counter
+from src.core_korp.interaction_counter_dfire import KORP_Counter
 
 import argparse
 

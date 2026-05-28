@@ -133,18 +133,9 @@ class ProtTyper:
         df['res_name'] = df['subst_name'].str[:3]
         subset = df[(df['res_name'].isin(self.standard_aa)) & (df['atom_name'].isin({'N', 'CA', 'C'}))].copy()
 
-        subst_types = subset['subst_name'].unique().tolist()
-        res_types = [x[:3] for x in subst_types]
-        n_residues = len(res_types)
+        res_types, ca_list, v1_list, v2_list, v3_list = [], [], [], [], []
 
-        coords_arr = np.full((n_residues, 3), np.nan)
-        v1_arr = np.full((n_residues, 3), np.nan)
-        v2_arr = np.full((n_residues, 3), np.nan)
-        v3_arr = np.full((n_residues, 3), np.nan)
-
-        i = 0
-
-        for _, group in subset.groupby('subst_name'):
+        for subst_name, group in subset.groupby('subst_name', sort = False):
 
             try:
 
@@ -156,16 +147,19 @@ class ProtTyper:
                 v2 = unit_vector(np.cross(v1, (n_coord - ca_coord)))
                 v3 = unit_vector(np.cross(v2, v1))
 
-                v1_arr[i, :] = v1
-                v2_arr[i, :] = v2
-                v3_arr[i, :] = v3
-
-                coords_arr[i, :] = ca_coord
+                res_types.append(subst_name[:3])
+                ca_list.append(ca_coord)
+                v1_list.append(v1)
+                v2_list.append(v2)
+                v3_list.append(v3)
 
             except IndexError:
                 pass
 
-            i += 1
+        coords_arr = np.array(ca_list)
+        v1_arr = np.array(v1_list)
+        v2_arr = np.array(v2_list)
+        v3_arr = np.array(v3_list)
 
         return res_types, coords_arr, v1_arr, v2_arr, v3_arr
 

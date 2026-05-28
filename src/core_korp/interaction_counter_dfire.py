@@ -38,7 +38,7 @@ class KORP_Counter:
 
         self.file_list = [x for x in os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor') if not x[:4] in casf_ids]
 
-        self.r_bins = np.arange(2.0, 11.0, 0.1)
+        self.r_bins = np.arange(2.0, 15.0, 0.1)
         self.theta_bins = np.arange(0, 180.0, 3.0)
         self.phi_bins = np.arange(0, 360.0, 3.0)
 
@@ -83,7 +83,7 @@ class KORP_Counter:
 
         # Build KDTree
         prot_tree = KDTree(prot_coords)
-        nearby_indices = prot_tree.query_ball_point(lig_coords, r = 11.0)
+        nearby_indices = prot_tree.query_ball_point(lig_coords, r = 15.0)
 
         # Process interactions
         for i in range(lig_coords.shape[0]):
@@ -101,7 +101,7 @@ class KORP_Counter:
 
                 # Calculate interaction vector and discretize distance
                 int_vector = l_coord - p_coord
-                dist = np.clip(np.linalg.norm(int_vector), 0.01, 10.99)
+                dist = np.clip(np.linalg.norm(int_vector), 0.01, 14.99)
                 r_idx = int(dist * 10) - 20
 
                 int_norm = unit_vector(int_vector)
@@ -184,6 +184,6 @@ class KORP_Counter:
                             pass
 
         np.savez_compressed(
-            DATA_DIR / 'potentials' / f'korp_counts_{self.database.lower()}.npz',
+            DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz',
             counts = self.bin_arr
         )

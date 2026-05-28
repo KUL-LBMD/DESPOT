@@ -291,10 +291,9 @@ class DESPOT_Scorer:
     Subsequent calls will be much faster.
     """
 
-    def __init__(self, smooth_mode = 'gaussian', ref_mode = 'uniform', database = 'CROWN'):
+    def __init__(self, mode = 'despot', database = 'CROWN'):
 
-        self.smooth_mode = smooth_mode
-        self.ref_mode = ref_mode
+        self.mode = mode
         self.database = database
 
         prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'prot_types.csv')
@@ -347,7 +346,7 @@ class DESPOT_Scorer:
         self.types_set_2d = set(self.types_list_2d)
         self.types_set_3d = set(self.types_list_3d)
 
-        loaded = np.load(DATA_DIR / 'potentials' / f'despot_{self.smooth_mode.lower()}_{self.ref_mode}_scores_{self.database.lower()}.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'{self.mode}_scores_{self.database.lower()}.npz')
 
         self.scores_1d = np.ascontiguousarray(loaded['scores_1d'].astype(np.float32))
         self.scores_2d = np.ascontiguousarray(loaded['scores_2d'].astype(np.float32))
@@ -522,8 +521,9 @@ def score_iso_kernel(
 class DESPOT_Isotropic_Scorer:
     """Numba-accelerated isotropic-only scorer."""
 
-    def __init__(self, database):
+    def __init__(self, mode = 'drugscore', database = 'CROWN'):
 
+        self.mode = mode
         self.database = database
         
         prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'prot_types.csv')
@@ -566,7 +566,7 @@ class DESPOT_Isotropic_Scorer:
             .tolist()
         )
 
-        loaded = np.load(DATA_DIR / 'potentials' / f'despot_ds_scores_{self.database.lower()}.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'{self.mode}_scores_{self.database.lower()}.npz')
 
         self.prot_types_list = self.types_list_1d + self.types_list_2d + self.types_list_3d
         self.prot_type_to_idx = {t: i for i, t in enumerate(self.prot_types_list)}

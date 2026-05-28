@@ -9,40 +9,65 @@ from numba import njit
 
 from src.config import DATA_DIR
 
-# ============================================================================
-# Numba-compiled interpolation kernels
-# ============================================================================
-
 @njit(fastmath=True, cache=True)
 def interp_3d(scores, r_grid, theta_grid, phi_grid, n_r, n_theta, n_phi):
     """
-    Trilinear interpolation on 3D grid.
+    Trilinear interpolation on a 3D grid where stored values represent
+    bin CENTERS, with phi treated as a periodic axis.
 
-    Parameters 
-    ----------
-    scores: array of shape [r, theta, phi], 3D grid
-    r_grid, theta_grid, phi_grid [float]: position on grid
-    n_r, n_theta, n_phi [int]: marks outer boundary
+    The caller passes raw "bin-edge" grid coordinates:
+        r_grid     = (dist  - r_min) / r_step
+        theta_grid = theta  / angular_step
+        phi_grid   = phi    / angular_step       (phi in [0, 2*pi))
+
+    This function applies the -0.5 shift internally so that integer
+    grid values land on bin centers.
+
+    Returns 0.0 if r or theta fall outside the trained range.
+    Phi wraps periodically.
     """
 
-    if r_grid < 0 or r_grid >= n_r - 1:
+    # --- shift to bin-center coordinates ---
+    r_c     = r_grid     - 0.5
+    theta_c = theta_grid - 0.5
+    phi_c   = phi_grid   - 0.5
+
+    # --- hard cutoff on r and theta (these axes are not periodic) ---
+    # Valid bin-center range is [-0.5, n - 0.5). Outside that, return 0.
+    if r_c < -0.5 or r_c >= n_r - 0.5:
         return 0.0
-    if theta_grid < 0 or theta_grid >= n_theta - 1:
+    if theta_c < -0.5 or theta_c >= n_theta - 0.5:
         return 0.0
-    if phi_grid < 0 or phi_grid >= n_phi - 1:
-        return 0.0
-    
-    i0 = int(r_grid)
-    i1 = min(i0 + 1, n_r - 1)
-    j0 = int(theta_grid)
-    j1 = min(j0 + 1, n_theta - 1)
-    k0 = int(phi_grid)
-    k1 = min(k0 + 1, n_phi - 1)
-    
-    tr = r_grid - i0
-    tt = theta_grid - j0
-    tp = phi_grid - k0
-    
+
+    # --- clamp r and theta to interpolatable range [0, n-1] ---
+    # The thin edge regions [-0.5, 0) and (n-1, n-0.5) get nearest-neighbor
+    # extrapolation, which is fine for half-bin slivers.
+    if r_c < 0.0:
+        r_c = 0.0
+    elif r_c > n_r - 1:
+        r_c = n_r - 1
+    if theta_c < 0.0:
+        theta_c = 0.0
+    elif theta_c > n_theta - 1:
+        theta_c = n_theta - 1
+
+    i0 = int(r_c)
+    i1 = i0 + 1 if i0 < n_r - 1 else i0
+    j0 = int(theta_c)
+    j1 = j0 + 1 if j0 < n_theta - 1 else j0
+
+    tr = r_c - i0
+    tt = theta_c - j0
+
+    # --- phi: periodic wrap ---
+    # Shift into the strictly-positive range so int() == floor().
+    phi_pos = phi_c + n_phi
+    k0_unwrapped = int(phi_pos)
+    tp = phi_pos - k0_unwrapped
+    k0 = k0_unwrapped % n_phi
+    k1 = (k0 + 1) % n_phi
+
+    # --- trilinear blend ---
     c000 = scores[i0, j0, k0]
     c001 = scores[i0, j0, k1]
     c010 = scores[i0, j1, k0]
@@ -51,19 +76,16 @@ def interp_3d(scores, r_grid, theta_grid, phi_grid, n_r, n_theta, n_phi):
     c101 = scores[i1, j0, k1]
     c110 = scores[i1, j1, k0]
     c111 = scores[i1, j1, k1]
-    
-    return (c000 * (1 - tr) * (1 - tt) * (1 - tp) +
-            c100 * tr * (1 - tt) * (1 - tp) +
-            c010 * (1 - tr) * tt * (1 - tp) +
-            c110 * tr * tt * (1 - tp) +
-            c001 * (1 - tr) * (1 - tt) * tp +
-            c101 * tr * (1 - tt) * tp +
-            c011 * (1 - tr) * tt * tp +
-            c111 * tr * tt * tp)
 
-# ============================================================================
-# Core scoring kernels
-# ============================================================================
+    return (c000 * (1 - tr) * (1 - tt) * (1 - tp) +
+            c100 * tr       * (1 - tt) * (1 - tp) +
+            c010 * (1 - tr) * tt       * (1 - tp) +
+            c110 * tr       * tt       * (1 - tp) +
+            c001 * (1 - tr) * (1 - tt) * tp       +
+            c101 * tr       * (1 - tt) * tp       +
+            c011 * (1 - tr) * tt       * tp       +
+            c111 * tr       * tt       * tp)
+
 
 @njit(fastmath=True, cache=True)
 def score_3d_kernel(
@@ -76,52 +98,76 @@ def score_3d_kernel(
     scores,
     r_min, r_step, angular_step,
     n_r, n_theta, n_phi,
-    b_factors
+    b_factors,
 ):
-    """Score all 3D interactions."""
+    """
+    Accumulate KORP scores into b_factors (one entry per ligand atom).
+
+    Note: the trained potential uses theta in [0, pi] without symmetry folding,
+    so we keep the full polar angle here too.
+    """
     n_prot = len(prot_indices)
     n_lig = len(lig_coords)
-    
+    pi = np.pi
+    two_pi = 2.0 * pi
+
     for p_idx in range(n_prot):
         i = prot_indices[p_idx]
         p_type_idx = prot_type_indices[p_idx]
-        px, py, pz = prot_coords[i, 0], prot_coords[i, 1], prot_coords[i, 2]
-        v1x, v1y, v1z = v1_arr[i, 0], v1_arr[i, 1], v1_arr[i, 2]
-        v2x, v2y, v2z = v2_arr[i, 0], v2_arr[i, 1], v2_arr[i, 2]
-        v3x, v3y, v3z = v3_arr[i, 0], v3_arr[i, 1], v3_arr[i, 2]
-        
+
+        px = prot_coords[i, 0]
+        py = prot_coords[i, 1]
+        pz = prot_coords[i, 2]
+        v1x = v1_arr[i, 0]; v1y = v1_arr[i, 1]; v1z = v1_arr[i, 2]
+        v2x = v2_arr[i, 0]; v2y = v2_arr[i, 1]; v2z = v2_arr[i, 2]
+        v3x = v3_arr[i, 0]; v3y = v3_arr[i, 1]; v3z = v3_arr[i, 2]
+
         for j in range(n_lig):
             l_type_idx = lig_type_indices[j]
             if l_type_idx < 0:
                 continue
-            
-            # Compute interaction vector
+
             dx = lig_coords[j, 0] - px
             dy = lig_coords[j, 1] - py
             dz = lig_coords[j, 2] - pz
-            dist = np.sqrt(dx*dx + dy*dy + dz*dz)
-            
-            if dist < 1e-10:
+            dist_sq = dx * dx + dy * dy + dz * dz
+
+            if dist_sq < 1e-20:
                 continue
-            
-            # Compute theta (with abs for symmetry)
-            cos_theta = dx*v1x + dy*v1y + dz*v1z / dist
-            cos_theta = max(-1.0, min(1.0, cos_theta)) # Clip to domain [-1, 1]
-            theta = np.arccos(cos_theta) # Range [0, 180]
-            
-            # Compute phi
-            proj_v2 = dx*v2x + dy*v2y + dz*v2z
-            proj_v3 = dx*v3x + dy*v3y + dz*v3z
-            phi = np.arctan2(proj_v3, proj_v2) + np.pi # Range [0, 360]
-            
-            # Convert to grid coordinates
+
+            dist = np.sqrt(dist_sq)
+            inv_dist = 1.0 / dist
+
+            # --- polar angle theta in [0, pi] ---
+            # FIX: parenthesize the whole dot product before dividing.
+            cos_theta = (dx * v1x + dy * v1y + dz * v1z) * inv_dist
+            # Guard against tiny FP excursions outside [-1, 1].
+            if cos_theta > 1.0:
+                cos_theta = 1.0
+            elif cos_theta < -1.0:
+                cos_theta = -1.0
+            theta = np.arccos(cos_theta)
+
+            # --- azimuthal angle phi in [0, 2*pi) ---
+            proj_v2 = dx * v2x + dy * v2y + dz * v2z
+            proj_v3 = dx * v3x + dy * v3y + dz * v3z
+            phi = np.arctan2(proj_v3, proj_v2) + pi
+            # arctan2 returns (-pi, pi], so phi here lives in (0, 2*pi].
+            # Wrap the upper edge back to 0 so the interpolator's modular
+            # math sees a clean half-open range.
+            if phi >= two_pi:
+                phi -= two_pi
+
+            # --- raw "bin-edge" grid coordinates; interp_3d shifts to centers ---
             r_grid = (dist - r_min) / r_step
             theta_grid = theta / angular_step
             phi_grid = phi / angular_step
-            
-            score = interp_3d(scores[p_type_idx, l_type_idx, :, :, :],
-                             r_grid, theta_grid, phi_grid,
-                             n_r, n_theta, n_phi)
+
+            score = interp_3d(
+                scores[p_type_idx, l_type_idx, :, :, :],
+                r_grid, theta_grid, phi_grid,
+                n_r, n_theta, n_phi,
+            )
             b_factors[j] += score
 
 # ============================================================================
@@ -136,9 +182,9 @@ class KORP_Scorer:
     Subsequent calls will be much faster.
     """
 
-    def __init__(self, norm_mode = 'normed_scores', database = 'CROWN'):
+    def __init__(self, mode = 'korp', database = 'CROWN'):
 
-        self.norm_mode = norm_mode
+        self.mode = mode
         self.database = database
 
         self.prot_types_list = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
@@ -150,8 +196,8 @@ class KORP_Scorer:
         self.prot_to_idx = {t: i for i, t in enumerate(self.prot_types_list)}
         self.lig_to_idx = {t: i for i, t in enumerate(self.lig_types_list)}
 
-        loaded = np.load(DATA_DIR / 'potentials' / f'korp_scores_{self.database.lower()}.npz')
-        self.scores = np.ascontiguousarray(loaded[self.norm_mode].astype(np.float32))
+        loaded = np.load(DATA_DIR / 'potentials' / f'{self.mode.lower()}_scores_{self.database.lower()}.npz')
+        self.scores = np.ascontiguousarray(loaded['scores'].astype(np.float32))
 
         # Grid parameters
         self.r_min = np.float32(2.0)
@@ -218,7 +264,7 @@ class KORP_Scorer:
             return b_factors
 
         prot_indices = np.unique(flat_neighbors).astype(np.int32)
-        prot_type_indices = [self.prot_to_idx[prot_types[i]] for i in prot_indices]
+        prot_type_indices = np.array([self.prot_to_idx[prot_types[i]] for i in prot_indices], dtype = np.int32)
         score_3d_kernel(prot_indices, prot_type_indices, prot_coords, v1_arr, v2_arr, v3_arr,
                         lig_coords, lig_type_indices, self.scores, self.r_min, self.r_step, self.angular_step,
                         self.n_r, self.n_theta, self.n_phi, b_factors)

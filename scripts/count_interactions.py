@@ -1,5 +1,5 @@
 from src.config import DATA_DIR
-from src.core.interaction_counter import DESPOT_Counter
+from src.core.interaction_counter_dfire import DESPOT_Counter
 
 import argparse
 
