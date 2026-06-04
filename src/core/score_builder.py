@@ -127,8 +127,8 @@ class DESPOT_Builder:
         del volume_corrections_1d, volume_corrections_2d, volume_corrections_3d
 
         ### Step 2: Map everything onto full sphere ###
-        counts_1d = counts_1d[:, :, :, np.newaxis, np.newaxis] * np.ones((1, 1, 1, self.n_lat, self.n_lon))
-        counts_2d = counts_2d[:, :, :, :, np.newaxis] * np.ones((1, 1, 1, 1, self.n_lon))
+        counts_1d = (counts_1d[:, :, :, np.newaxis, np.newaxis] * np.ones((1, 1, 1, self.n_lat, self.n_lon)) / (self.n_lat * self.n_lon))
+        counts_2d = (counts_2d[:, :, :, :, np.newaxis] * np.ones((1, 1, 1, 1, self.n_lon))) / self.n_lon
         counts_3d = np.concatenate([counts_3d, counts_3d[:, :, :, ::-1, :]], axis = 3)
         counts_3d = np.concatenate([counts_3d[:, :, :, :, ::-1], counts_3d], axis = 4)
 
@@ -204,10 +204,8 @@ class DESPOT_Builder:
         n_ref_shells = 10  # last 1 Å
         rho_outer = rho_corrected[:, :, -n_ref_shells:]
         rho_sum = np.sum(rho_outer, axis = (0,2)) # [l]
-        rho_sum_real = rho_sum[:-1]                      # exclude void from the reference
-        ref_real = rho_sum_real / rho_sum_real.sum()     # real-type bulk composition, sums to 1
-        ref = np.concatenate([ref_real, [1.0]])          # dummy void slot; dropped by :-1 at scoring
-        return ref[None, :, None, None, None]
+        ref_real = rho_sum / rho_sum.sum()
+        return ref_real[None, :, None, None, None]
 
     def inverse_boltzmann(self, cond_prob, ref_prob):
         eps = 1e-12
