@@ -7,39 +7,15 @@ import pandas as pd
 import pyshtools as pysh
 
 from src.config import DATA_DIR
-
+        
 class DESPOT_Builder:
-    """
-    Class for building anisotropic statistical potentials
-    """
-
-    def __init__(self, database, ref_mode='marginal', smooth_mode = 'Gaussian'):
+    def __init__(self, database):
         """
         Parameters
         ----------
         database : str
             Name of the count database to load.
-        ref_mode : {'marginal', 'uniform'}, default 'marginal'
-            Choice of reference state P(l) for the inverse-Boltzmann step.
-
-              - 'marginal': empirical marginal,
-                    P(l) = sum_{p, r, theta, phi} P(p, l, r, theta, phi).
-                Reference is the observed composition, weighted by where atoms
-                actually occur. Picks up angular structure from the data, which
-                partially cancels orientational signal.
-
-              - 'uniform': ideal-gas / KORP-style reference,
-                    P(l) = sum_p P(p) * mean_{r, theta, phi}[P(l | p, r, theta, phi)].
-                Spatial average is uniform over the grid, so the reference is
-                angle-blind. Theoretically cleaner for an anisotropic KBP.
         """
-
-        if ref_mode not in {'marginal', 'uniform'}:
-            raise ValueError(
-                f"ref_mode must be 'marginal' or 'uniform', got {ref_mode!r}"
-            )
-        self.ref_mode = ref_mode
-        self.smooth_mode = smooth_mode
 
         # Set types lists for ligand atoms and protein atoms
         self.database = database
@@ -83,23 +59,245 @@ class DESPOT_Builder:
             .tolist()
         )
 
-        self.r_bins = np.arange(1.0, 6.1, 0.1)
-        self.theta_bins_2d = np.deg2rad(np.arange(0, 183.0, 3.0))
-        self.theta_bins_3d = np.deg2rad(np.arange(0, 93.0, 3.0))
-        self.phi_bins = np.deg2rad(np.arange(0, 183.0, 3.0))
+        self.r_bins = np.arange(1.0, 8.1, 0.1)
+        self.theta_bins = np.deg2rad(np.arange(0, 183.0, 3.0))
+        self.phi_bins = np.deg2rad(np.arange(0, 363.0, 3.0))
 
         self.sigma_r = 1
-        self.sigma_angle = 0.05
+        self.sigma_angle = 0.1
         self.n_lat = 60
-        self.n_lon = 60
+        self.n_lon = 120
 
-    def blur_counts(self):
+    def counts_to_rho(self):
         """
         Applies volume normalization and Gaussian smoothing on raw counts
         """
 
         # Load raw counts
-        loaded = np.load(DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz')
+        counts_1d = loaded['arr_1d'].astype(np.float32)
+        counts_2d = loaded['arr_2d'].astype(np.float32)
+        counts_3d = loaded['arr_3d'].astype(np.float32)
+
+        ### Step 1: volume normalization ###
+
+        # 1D case
+        volume_corrections_1d = np.zeros((counts_1d.shape[2]), dtype = np.float32)
+        for i in range(volume_corrections_1d.shape[0]):
+            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
+            r_mid = (r_i + r_e) / 2
+            r_factor = r_mid**2 * (r_e - r_i)
+            volume_corrections_1d[i] = 4 * np.pi * r_factor
+
+        counts_1d = counts_1d / volume_corrections_1d[np.newaxis, np.newaxis, :]
+
+        # 2D case
+        volume_corrections_2d = np.zeros((counts_2d.shape[2], counts_2d.shape[3]), dtype = np.float32)
+        for i in range(volume_corrections_2d.shape[0]):
+            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
+            r_mid = (r_i + r_e) / 2
+            r_factor = r_mid**2 * (r_e - r_i)
+            for j in range(volume_corrections_2d.shape[1]):
+                theta_i, theta_e = self.theta_bins[j], self.theta_bins[j+1]
+                theta_mid = (theta_i + theta_e) / 2
+                theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
+                volume_corrections_2d[i,j] = 2 * np.pi * theta_factor * r_factor
+
+        counts_2d = counts_2d / volume_corrections_2d[np.newaxis, np.newaxis, :, :]
+
+        # 3D case
+        volume_corrections_3d = np.zeros((counts_3d.shape[2], counts_3d.shape[3], counts_3d.shape[4]), dtype = np.float32)
+        for i in range(volume_corrections_3d.shape[0]):
+            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
+            r_mid = (r_i + r_e) / 2
+            r_factor = r_mid**2 * (r_e - r_i)
+
+            for j in range(volume_corrections_3d.shape[1]):
+                theta_i, theta_e = self.theta_bins[j], self.theta_bins[j+1]
+                theta_mid = (theta_i + theta_e) / 2
+                theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
+
+                for k in range(volume_corrections_3d.shape[2]):
+                    phi_i, phi_e = self.phi_bins[k], self.phi_bins[k+1]
+                    phi_factor = phi_e - phi_i
+                    volume_corrections_3d[i,j,k] = 4 * phi_factor * theta_factor * r_factor
+
+        counts_3d = counts_3d / volume_corrections_3d[np.newaxis, np.newaxis, :, :, :]
+
+        del volume_corrections_1d, volume_corrections_2d, volume_corrections_3d
+
+        ### Step 2: Map everything onto full sphere ###
+        counts_1d = counts_1d[:, :, :, np.newaxis, np.newaxis] * np.ones((1, 1, 1, self.n_lat, self.n_lon))
+        counts_2d = counts_2d[:, :, :, :, np.newaxis] * np.ones((1, 1, 1, 1, self.n_lon))
+        counts_3d = np.concatenate([counts_3d, counts_3d[:, :, :, ::-1, :]], axis = 3)
+        counts_3d = np.concatenate([counts_3d[:, :, :, :, ::-1], counts_3d], axis = 4)
+
+        rho = np.concatenate([counts_1d, counts_2d, counts_3d], axis = 0)
+
+        ### Step 3: SH smoothing + radial smoothing ###
+        rho = gaussian_filter(rho, sigma = [0, 0, self.sigma_r, 0, 0])
+        for i in range(rho.shape[0]):
+            for j in range(rho.shape[1]):
+                print(f'{i} / {rho.shape[0]} - {j} / {rho.shape[1]}')
+                for k in range(rho.shape[2]):
+                    X = rho[i,j,k,:,:]
+                    Xgrid = pysh.SHGrid.from_array(X)
+                    Xcoeff = Xgrid.expand()
+                    l = np.arange(Xcoeff.lmax + 1)
+                    lowpass_filter = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
+                    filtered_coeffs = Xcoeff.copy()
+                    for l_idx in range(Xcoeff.lmax + 1):
+                        filtered_coeffs.coeffs[:, l_idx, :l_idx+1] *= lowpass_filter[l_idx]
+                    smoothed_grid = filtered_coeffs.expand(extend = False)
+                    Xsmooth = smoothed_grid.to_array().clip(min=0)
+                    rho[i,j,k,:,:] = Xsmooth
+
+        return rho
+    
+    def add_void(self, rho):
+        lig_sum = np.sum(rho, axis = 1) # [p,r, theta, phi]
+        xi = np.max(lig_sum, axis = (1,2,3), keepdims = True)
+        decoy_vals = xi - lig_sum # Add void count to density, such that total density is equal across all spherical voxels
+        rho_new = np.concatenate((rho, decoy_vals[:, np.newaxis, :, :, :]), axis = 1) # [p, l+1, r, theta, phi]
+
+        rho_sum = np.sum(rho, axis = (1,2,3,4)) # [p]
+        rho_new_sum = np.sum(rho_new, axis = (1,2,3,4)) # [p]
+
+        rho_new = rho_new * (rho_sum / rho_new_sum)[:, np.newaxis, np.newaxis, np.newaxis, np.newaxis] # Rescale to keep P(p) constant
+        return rho_new
+    
+    def get_cond_prob(self, rho):
+        """
+        P(l | p, r, theta, phi)
+
+        Parameters
+        ----------
+        - rho [p,l,r,theta,phi]
+        """
+
+        lig_sum = np.sum(rho, axis = 1) # [p,r,theta,phi]
+        return rho / lig_sum[:, np.newaxis, :, :, :]
+
+    def get_ref_prob(self, rho):
+        """
+        P(l | r_max)
+        """
+
+        volume_corrections_3d = np.zeros((rho.shape[2], rho.shape[3], rho.shape[4]), dtype = np.float32)
+        for i in range(volume_corrections_3d.shape[0]):
+            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
+            r_mid = (r_i + r_e) / 2
+            r_factor = r_mid**2 * (r_e - r_i)
+
+            for j in range(volume_corrections_3d.shape[1]):
+                theta_i, theta_e = self.theta_bins[j], self.theta_bins[j+1]
+                theta_mid = (theta_i + theta_e) / 2
+                theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
+
+                for k in range(volume_corrections_3d.shape[2]):
+                    phi_i, phi_e = self.phi_bins[k], self.phi_bins[k+1]
+                    phi_factor = phi_e - phi_i
+
+                    volume_corrections_3d[i,j,k] = phi_factor * theta_factor * r_factor
+
+        rho_corrected = np.sum(rho * volume_corrections_3d[np.newaxis, np.newaxis, :, :, :], axis = (3,4)) # [p,l,r]. Include volume correction for integral over theta and phi
+        n_ref_shells = 10  # last 1 Å
+        rho_outer = rho_corrected[:, :, -n_ref_shells:]
+        rho_sum = np.sum(rho_outer, axis = (0,2)) # [l]
+        rho_sum_real = rho_sum[:-1]                      # exclude void from the reference
+        ref_real = rho_sum_real / rho_sum_real.sum()     # real-type bulk composition, sums to 1
+        ref = np.concatenate([ref_real, [1.0]])          # dummy void slot; dropped by :-1 at scoring
+        return ref[None, :, None, None, None]
+
+    def inverse_boltzmann(self, cond_prob, ref_prob):
+        eps = 1e-12
+        scores = cond_prob / ref_prob
+        scores = np.clip(scores, eps, None)
+        scores = np.clip(-1 * np.log(scores), a_min = -5, a_max = 5)
+
+        # Split back by symmetry class
+        i1 = len(self.types_list_1d)
+        i2 = i1 + len(self.types_list_2d)
+        scores_1d = scores[:i1, :-1, :50, :, :].mean(axis=(-1, -2))
+        scores_2d = scores[i1:i2, :-1, :50, :, :].mean(axis=-1)
+        scores_3d = scores[i2:, :-1, :50, :self.n_lat // 2, :self.n_lon // 2]
+
+        out_path = (
+            DATA_DIR / 'potentials'
+            / f'despot_scores_{self.database.lower()}.npz'
+        )
+        np.savez_compressed(out_path,
+            scores_1d = scores_1d, scores_2d = scores_2d, scores_3d = scores_3d)
+        print(f'Saved scores to {out_path}')
+
+class DFIRE_Builder:
+    def __init__(self, database):
+        """
+        Parameters
+        ----------
+        database : str
+            Name of the count database to load.
+        """
+
+        # Set types lists for ligand atoms and protein atoms
+        self.database = database
+        prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'prot_types.csv')
+        lig_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'lig_types.csv')
+
+        self.types_list_1d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Isotropic'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.types_list_2d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Axial'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.types_list_3d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Anisotropic'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.ligand_types_list = (
+            lig_counts_df['atom_type']
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        self.r_bins = np.arange(1.0, 8.1, 0.1)
+        self.theta_bins_2d = np.deg2rad(np.arange(0, 183.0, 3.0))
+        self.theta_bins_3d = np.deg2rad(np.arange(0, 93.0, 3.0))
+        self.phi_bins = np.deg2rad(np.arange(0, 183.0, 3.0))
+
+        self.sigma_r = 1
+        self.sigma_angle = 0.1
+        self.n_lat = 60
+        self.n_lon = 60
+
+    def counts_to_rho(self):
+        """
+        Applies volume normalization and Gaussian smoothing on raw counts
+        """
+
+        # Load raw counts
+        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz')
         counts_1d = loaded['arr_1d'].astype(np.float32)
         counts_2d = loaded['arr_2d'].astype(np.float32)
         counts_3d = loaded['arr_3d'].astype(np.float32)
@@ -162,80 +360,74 @@ class DESPOT_Builder:
         rho = np.concatenate([counts_1d, counts_2d, counts_3d], axis = 0)
 
         ### Step 3: SH smoothing + radial smoothing ###
-        if self.smooth_mode == 'SH':
-            rho = gaussian_filter(rho, sigma = [0, 0, self.sigma_r, 0, 0])
-            for i in range(rho.shape[0]):
-                for j in range(rho.shape[1]):
-                    print(f'{i} / {rho.shape[0]} - {j} / {rho.shape[1]}')
-                    for k in range(rho.shape[2]):
-                        rho_slice = rho[i,j,k,:,:]
-                        X = np.concatenate([rho_slice[:, ::-1], rho_slice], axis = 1)
-                        Xgrid = pysh.SHGrid.from_array(X)
-                        Xcoeff = Xgrid.expand()
-                        l = np.arange(Xcoeff.lmax + 1)
-                        lowpass_filter = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
-                        filtered_coeffs = Xcoeff.copy()
-                        for l_idx in range(Xcoeff.lmax + 1):
-                            filtered_coeffs.coeffs[:, l_idx, :l_idx+1] *= lowpass_filter[l_idx]
-                        smoothed_grid = filtered_coeffs.expand(extend = False)
-                        Xsmooth = smoothed_grid.to_array().clip(min=0)
-                        rho[i,j,k,:,:] = Xsmooth[:, self.n_lon:]
-        else:
-            rho = gaussian_filter(rho, sigma = [0, 0, self.sigma_r, 1, 1])
+        rho = gaussian_filter(rho, sigma = [0, 0, self.sigma_r, 0, 0])
+        for i in range(rho.shape[0]):
+            for j in range(rho.shape[1]):
+                print(f'{i} / {rho.shape[0]} - {j} / {rho.shape[1]}')
+                for k in range(rho.shape[2]):
+                    rho_slice = rho[i,j,k,:,:]
+                    X = np.concatenate([rho_slice[:, ::-1], rho_slice], axis = 1)
+                    Xgrid = pysh.SHGrid.from_array(X)
+                    Xcoeff = Xgrid.expand()
+                    l = np.arange(Xcoeff.lmax + 1)
+                    lowpass_filter = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
+                    filtered_coeffs = Xcoeff.copy()
+                    for l_idx in range(Xcoeff.lmax + 1):
+                        filtered_coeffs.coeffs[:, l_idx, :l_idx+1] *= lowpass_filter[l_idx]
+                    smoothed_grid = filtered_coeffs.expand(extend = False)
+                    Xsmooth = smoothed_grid.to_array().clip(min=0)
+                    rho[i,j,k,:,:] = Xsmooth[:, self.n_lon:]
 
         return rho
     
-    def counts_to_prob(self, rho):
-        """P(l | p, r, theta, phi) = n(p,l,r, theta, phi) / sum_l{n(p,l,r, theta, phi)}"""
+    def get_cond_prob(self, rho):
+        """
+        P(l | p, r, theta, phi)
 
-        lig_sum = np.sum(rho, axis = 1) # [p,r, theta, phi]
-        xi = np.max(lig_sum, axis = (1,2,3), keepdims = True)
-        decoy_vals = xi - lig_sum # Add void count to density, such that total density is equal across all spherical voxels
-        rho = np.concatenate((rho, decoy_vals[:, np.newaxis, :, :, :]), axis = 1) # [p, l+1, r, theta, phi]
-        prob = rho / np.sum(rho) # L1-normalization to get P(p, l, r, theta, phi)
-        del rho
-        cond_prob = prob / np.sum(prob, axis = 1, keepdims = True) # P(l | p,r,theta,phi)
-        return prob, cond_prob
+        Parameters
+        ----------
+        - rho [p,l,r,theta,phi]
+        """
+
+        lig_sum = np.sum(rho, axis = 1) + 1e-12 # [p,r,theta,phi]
+        return rho / lig_sum[:, np.newaxis, :, :, :]
     
-    def ref_probs(self, prob, cond_prob):
+    def get_ref_prob(self, rho):
         """
-        Compute the reference distribution P(l) according to self.ref_mode.
-
-          - 'marginal': P(l) = sum_{p, r, theta, phi} P(p, l, r, theta, phi)
-          - 'uniform':  P(l) = sum_p P(p) * mean_{r, theta, phi}[P(l | p, r, theta, phi)]
-
-        Both branches return ref_prob with shape (1, L+1, 1, 1, 1) so it
-        broadcasts against cond_prob in inverse_boltzmann the same way.
+        P(l | p, r_max)
         """
 
-        if self.ref_mode == 'marginal':
-            ref_prob = np.sum(prob, axis = (0, 2, 3, 4), keepdims = True)
+        volume_corrections_3d = np.zeros((rho.shape[2], rho.shape[3], rho.shape[4]), dtype = np.float32)
+        for i in range(volume_corrections_3d.shape[0]):
+            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
+            r_mid = (r_i + r_e) / 2
+            r_factor = r_mid**2 * (r_e - r_i)
 
-        else:  # 'uniform'
-            # P(p): marginal protein-type weights. Exclude the decoy ligand
-            # column so that the synthetic void mass does not bias which
-            # protein types dominate the reference (matches score_builder).
-            wp = np.sum(prob[:, :-1, :, :, :], axis = (1, 2, 3, 4))  # (P,)
-            wp = wp / np.sum(wp)
+            for j in range(volume_corrections_3d.shape[1]):
+                theta_i, theta_e = self.theta_bins_2d[j], self.theta_bins_2d[j+1]
+                theta_mid = (theta_i + theta_e) / 2
+                theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
 
-            # Spatially-uniform mean of P(l | p, r, theta, phi) over the
-            # (r, lat, lon) grid bins.
-            mean_lp = np.mean(cond_prob, axis = (2, 3, 4))  # (P, L+1)
+                for k in range(volume_corrections_3d.shape[2]):
+                    phi_i, phi_e = self.phi_bins[k], self.phi_bins[k+1]
+                    phi_factor = phi_e - phi_i
 
-            # Weighted sum over protein types -> P(l), shape (L+1,)
-            ref_prob = (wp @ mean_lp).reshape(1, -1, 1, 1, 1)
+                    # Multiply by factor 4: with 2 unsigned axes, 4 voxels are always equivalent
+                    volume_corrections_3d[i,j,k] = 2 * phi_factor * theta_factor * r_factor
 
-        return ref_prob
+        rho_corrected = np.sum(rho * volume_corrections_3d[np.newaxis, np.newaxis, :, :, :], axis = (3,4)) # [p,l,r]. Include volume correction for integral over theta and phi
+        n_ref_shells = 10  # last 1 Å
+        rho_outer = rho_corrected[:, :, -n_ref_shells:]
+        rho_sum = np.sum(rho_outer, axis = 2) + 1e-12 # [p,l]
+        lig_sum = np.sum(rho_sum, axis = 1, keepdims = True) # Add small correction
+        return (rho_sum / lig_sum)[:, :, np.newaxis, np.newaxis, np.newaxis] 
     
     def inverse_boltzmann(self, cond_prob, ref_prob):
-        """
-        score[p,l,r,theta,phi] = ln[P(l | p,r,theta,phi) / P(l)]
-        """
-
-        eps = 1e-12 # Lower bound, prevent 0 probabilities
+        eps = 1e-12
         scores = cond_prob / ref_prob
         scores = np.clip(scores, eps, None)
         scores = np.clip(-1 * np.log(scores), a_min = -5, a_max = 5)
+        scores = scores[:, :, :50, :, :]
 
         # Split back by symmetry class
         i1 = len(self.types_list_1d)
@@ -247,7 +439,7 @@ class DESPOT_Builder:
         # Include ref_mode in the filename so benchmarking runs do not overwrite each other.
         out_path = (
             DATA_DIR / 'potentials'
-            / f'despot_scores_{self.database.lower()}.npz'
+            / f'dfire_scores_{self.database.lower()}.npz'
         )
         np.savez_compressed(out_path,
             scores_1d = scores_1d, scores_2d = scores_2d, scores_3d = scores_3d)
@@ -420,321 +612,3 @@ class DESPOT_DS_Builder:
 
         np.savez_compressed(DATA_DIR / 'potentials' / f'drugscore_scores_{self.database.lower()}.npz', 
             scores_1d = self.scores)
-        
-class DFIRE_Builder:
-    def __init__(self, database):
-
-        # Set types lists for ligand atoms and protein atoms
-        self.database = database
-        prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'prot_types.csv')
-        lig_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'lig_types.csv')
-
-        self.types_list_1d = (
-            prot_counts_df.loc[
-                (prot_counts_df['local_reference_frame'] == 'Isotropic'),
-                'atom_type'
-            ]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.types_list_2d = (
-            prot_counts_df.loc[
-                (prot_counts_df['local_reference_frame'] == 'Axial'),
-                'atom_type'
-            ]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.types_list_3d = (
-            prot_counts_df.loc[
-                (prot_counts_df['local_reference_frame'] == 'Anisotropic'),
-                'atom_type'
-            ]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.ligand_types_list = (
-            lig_counts_df['atom_type']
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.r_bins = np.arange(1.0, 8.1, 0.1)
-        self.theta_bins_2d = np.deg2rad(np.arange(0, 183.0, 3.0))
-        self.theta_bins_3d = np.deg2rad(np.arange(0, 93.0, 3.0))
-        self.phi_bins_3d = np.deg2rad(np.arange(0, 183.0, 3.0))
-        self.phi_bins = np.deg2rad(np.arange(0, 363.0, 3.0))
-
-        self.sigma_r = 1
-        self.sigma_angle = 0.05
-        self.n_lat = 60
-        self.n_lon = 60
-
-    def blur_counts(self):
-        """
-        Applies volume normalization and Gaussian smoothing on raw counts
-        """
-
-        # Load raw counts
-        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz')
-        counts_1d = loaded['arr_1d'].astype(np.float32)
-        counts_2d = loaded['arr_2d'].astype(np.float32)
-        counts_3d = loaded['arr_3d'].astype(np.float32)
-
-        ### Step 1: volume normalization ###
-
-        # 1D case
-        volume_corrections_1d = np.zeros((counts_1d.shape[2]), dtype = np.float32)
-        for i in range(volume_corrections_1d.shape[0]):
-            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
-            r_mid = (r_i + r_e) / 2
-            r_factor = r_mid**2 * (r_e - r_i)
-            volume_corrections_1d[i] = 4 * np.pi * r_factor
-
-        counts_1d = counts_1d / volume_corrections_1d[np.newaxis, np.newaxis, :]
-
-        # 2D case
-        volume_corrections_2d = np.zeros((counts_2d.shape[2], counts_2d.shape[3]), dtype = np.float32)
-        for i in range(volume_corrections_2d.shape[0]):
-            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
-            r_mid = (r_i + r_e) / 2
-            r_factor = r_mid**2 * (r_e - r_i)
-            for j in range(volume_corrections_2d.shape[1]):
-                theta_i, theta_e = self.theta_bins_2d[j], self.theta_bins_2d[j+1]
-                theta_mid = (theta_i + theta_e) / 2
-                theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
-
-                volume_corrections_2d[i,j] = 2 * np.pi * theta_factor * r_factor
-
-        counts_2d = counts_2d / volume_corrections_2d[np.newaxis, np.newaxis, :, :]
-
-        # 3D case
-        volume_corrections_3d = np.zeros((counts_3d.shape[2], counts_3d.shape[3], counts_3d.shape[4]), dtype = np.float32)
-        for i in range(volume_corrections_3d.shape[0]):
-            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
-            r_mid = (r_i + r_e) / 2
-            r_factor = r_mid**2 * (r_e - r_i)
-
-            for j in range(volume_corrections_3d.shape[1]):
-                theta_i, theta_e = self.theta_bins_3d[j], self.theta_bins_3d[j+1]
-                theta_mid = (theta_i + theta_e) / 2
-                theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
-
-                for k in range(volume_corrections_3d.shape[2]):
-                    phi_i, phi_e = self.phi_bins_3d[k], self.phi_bins_3d[k+1]
-                    phi_factor = phi_e - phi_i
-
-                    # Multiply by factor 4: with 2 unsigned axes, 4 voxels are always equivalent
-                    volume_corrections_3d[i,j,k] = 4 * phi_factor * theta_factor * r_factor 
-
-        counts_3d = counts_3d / volume_corrections_3d[np.newaxis, np.newaxis, :, :, :]
-
-        del volume_corrections_1d, volume_corrections_2d, volume_corrections_3d
-
-        ### Step 2: Map everything onto full sphere ###
-        counts_1d = (counts_1d[:, :, :, np.newaxis, np.newaxis] * np.ones((1, 1, 1, self.n_lat, self.n_lon)) / (self.n_lat * self.n_lon))
-        counts_2d = (counts_2d[:, :, :, :, np.newaxis] * np.ones((1, 1, 1, 1, self.n_lon)) / self.n_lon)
-        counts_3d = np.concatenate([counts_3d, counts_3d[:, :, :, ::-1, :]], axis = 3) / 2 # Equally divide density over 2 halfs (60, 60)
-
-        rho = np.concatenate([counts_1d, counts_2d, counts_3d], axis = 0)
-        rho = np.concatenate([rho[:, :, :, :, ::-1], rho], axis = 4)
-
-        ### Step 3: SH smoothing + radial smoothing ###
-        rho = gaussian_filter(rho, sigma = [0, 0, self.sigma_r, 0, 0])
-        for i in range(rho.shape[0]):
-            for j in range(rho.shape[1]):
-                print(f'{i} / {rho.shape[0]} - {j} / {rho.shape[1]}')
-                for k in range(rho.shape[2]):
-                    X = rho[i,j,k,:,:]
-                    Xgrid = pysh.SHGrid.from_array(X)
-                    Xcoeff = Xgrid.expand()
-                    l = np.arange(Xcoeff.lmax + 1)
-                    lowpass_filter = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
-                    filtered_coeffs = Xcoeff.copy()
-                    for l_idx in range(Xcoeff.lmax + 1):
-                        filtered_coeffs.coeffs[:, l_idx, :l_idx+1] *= lowpass_filter[l_idx]
-                    smoothed_grid = filtered_coeffs.expand(extend = False)
-                    Xsmooth = smoothed_grid.to_array().clip(min=0)
-                    rho[i,j,k,:,:] = Xsmooth
-
-        return rho
-    
-    def ref_probs(self, rho):
-        """
-        P_ref(p,l,r,theta,phi)
-        """
-
-        volume_normalization = np.zeros((rho.shape[3], rho.shape[4]))
-        for i in range(volume_normalization.shape[0]):
-            theta_i, theta_e = self.theta_bins_2d[i], self.theta_bins_2d[i+1]
-            theta_mid = (theta_i + theta_e) / 2
-            theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
-            for j in range(volume_normalization.shape[1]):
-                phi_i, phi_e = self.phi_bins[j], self.phi_bins[j+1]
-                phi_factor = phi_e - phi_i
-                volume_normalization[i,j] = theta_factor * phi_factor
-
-        n_ref_shells = 10  # last 1 Å
-        rho_outer = rho[:, :, -n_ref_shells:, :, :]
-        rho_mean = (rho_outer * volume_normalization[None, None, None, :, :]).sum(axis=(-1, -2)).mean(axis=-1) / (4*np.pi) # Shape [p,l]
-
-        r_mid = 0.5 * (self.r_bins[:-1] + self.r_bins[1:])  # shape [130]
-        r_cut = r_mid[-1]                                    # ≈ 14.95 Å
-        r_factor = (r_mid / r_cut) ** (-0.39)
-        rho_ref = rho_mean[:, :, np.newaxis] * r_factor[np.newaxis, np.newaxis, :] # [p,l,r]
-
-        return rho_ref
-    
-    def inverse_boltzmann(self, cond_prob, ref_prob):
-        """
-        score[p,l,r,theta,phi] = log10[P(obs) / P(ref)]
-
-        - cond_prob [p,l,r,theta,phi]
-        - ref_prob [p,l,r]
-        """
-
-        self.eps = 1e-16
-
-        scores = cond_prob / (ref_prob[:, :, :, np.newaxis, np.newaxis] + self.eps)
-        scores =  np.clip(-1 * np.log10(scores), a_min = -5, a_max = 5)
-        scores = scores[:, :, :50, :, :]
-
-        # Split back by symmetry class
-        i1 = len(self.types_list_1d)
-        i2 = i1 + len(self.types_list_2d)
-        scores_1d = scores[:i1, :-1, :, :, :].mean(axis=(-1, -2))
-        scores_2d = scores[i1:i2, :-1, :, :, :].mean(axis=-1)
-        scores_3d = scores[i2:, :-1, :, :self.n_lat // 2, :]
-
-        out_path = (
-            DATA_DIR / 'potentials'
-            / f'dfire_scores_{self.database.lower()}.npz'
-        )
-        np.savez_compressed(out_path,
-            scores_1d = scores_1d, scores_2d = scores_2d, scores_3d = scores_3d)
-
-
-class DFIRE_Isotropic_Builder:
-    def __init__(self, database):
-
-        # Set types lists for ligand atoms and protein atoms
-        self.database = database
-        prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'prot_types.csv')
-        lig_counts_df = pd.read_csv(DATA_DIR / 'metadata' / 'lig_types.csv')
-
-        self.types_list_1d = (
-            prot_counts_df.loc[
-                (prot_counts_df['local_reference_frame'] == 'Isotropic'),
-                'atom_type'
-            ]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.types_list_2d = (
-            prot_counts_df.loc[
-                (prot_counts_df['local_reference_frame'] == 'Axial'),
-                'atom_type'
-            ]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.types_list_3d = (
-            prot_counts_df.loc[
-                (prot_counts_df['local_reference_frame'] == 'Anisotropic'),
-                'atom_type'
-            ]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.ligand_types_list = (
-            lig_counts_df['atom_type']
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        self.prot_types_list = self.types_list_1d + self.types_list_2d + self.types_list_3d
-
-        self.r_bins = np.arange(1.0, 8.1, 0.1)
-        self.sigma_r = 1
-
-    def blur_counts(self):
-        """
-        Applies volume normalization and Gaussian smoothing on raw counts
-        """
-
-        # Load raw counts
-        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz')
-        counts_1d = loaded['arr_1d'].astype(np.float32)
-        counts_2d = loaded['arr_2d'].astype(np.float32)
-        counts_3d = loaded['arr_3d'].astype(np.float32)
-
-        # Combine all counts into [p,l,r] array
-        total_counts_2d = np.sum(counts_2d, axis = 3)
-        total_counts_3d = np.sum(counts_3d, axis = (3,4))
-        total_counts = np.concatenate((counts_1d, total_counts_2d, total_counts_3d))
-
-        ### Step 1: volume normalization ###
-
-        # 1D case
-        volume_corrections_1d = np.zeros((counts_1d.shape[2]), dtype = np.float32)
-        for i in range(volume_corrections_1d.shape[0]):
-            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
-            r_mid = (r_i + r_e) / 2
-            r_factor = r_mid**2 * (r_e - r_i)
-            volume_corrections_1d[i] = 4 * np.pi * r_factor
-
-        total_counts = total_counts / volume_corrections_1d[np.newaxis, np.newaxis, :]
-        rho = gaussian_filter(total_counts, sigma = [0, 0, self.sigma_r])
-
-        return rho
-    
-    def ref_probs(self, rho):
-        """
-        P_ref(p,l,r,theta,phi)
-        """
-
-        n_ref_shells = 10  # last 1 Å
-        rho_outer = rho[:, :, -n_ref_shells:]
-        rho_mean = np.mean(rho_outer, axis = 2)
-
-        r_mid = 0.5 * (self.r_bins[:-1] + self.r_bins[1:])  # shape [130]
-        r_cut = r_mid[-1]                                    # ≈ 14.95 Å
-        r_factor = (r_mid / r_cut) ** (-0.39)
-        rho_ref = rho_mean[:, :, np.newaxis] * r_factor[np.newaxis, np.newaxis, :] # [p,l,r]
-
-        return rho_ref
-    
-    def inverse_boltzmann(self, cond_prob, ref_prob):
-        """
-        score[p,l,r,theta,phi] = log10[P(obs) / P(ref)]
-
-        - cond_prob [p,l,r,theta,phi]
-        - ref_prob [p,l,r]
-        """
-
-        self.eps = 1e-16
-
-        scores = cond_prob / (ref_prob + self.eps)
-        scores =  np.clip(-1 * np.log10(scores), a_min = -5, a_max = 5)
-        scores = scores[:, :, :50]
-
-        out_path = (
-            DATA_DIR / 'potentials'
-            / f'dfire_iso_scores_{self.database.lower()}.npz'
-        )
-        np.savez_compressed(out_path,
-            scores_1d = scores)

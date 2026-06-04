@@ -1,12 +1,12 @@
 from src.config import DATA_DIR
-from src.core_korp.interaction_counter_dfire import KORP_Counter
+from src.core_korp.interaction_counter import KORP_Counter
 
 import argparse
 
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
+	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
 	args = parser.parse_args()
 
 	DATABASE = args.database

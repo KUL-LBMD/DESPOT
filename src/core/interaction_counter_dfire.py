@@ -260,3 +260,10 @@ class DESPOT_Counter:
             arr_2d=self.bin_arr_2d,
             arr_3d=self.bin_arr_3d
         )
+
+        np.savez_compressed(
+            DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz',
+            arr_1d=self.bin_arr_1d[:,:,:50],
+            arr_2d=self.bin_arr_2d[:,:,:50,:],
+            arr_3d=self.bin_arr_3d[:,:,:50,:,:]
+        )

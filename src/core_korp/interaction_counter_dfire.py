@@ -184,6 +184,6 @@ class KORP_Counter:
                             pass
 
         np.savez_compressed(
-            DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz',
+            DATA_DIR / 'potentials' / f'dfire_ca_counts_{self.database.lower()}.npz',
             counts = self.bin_arr
         )

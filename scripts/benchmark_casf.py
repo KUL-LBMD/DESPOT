@@ -24,11 +24,19 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_pdbbind', 'korp_pdbbind', 'dfire_pdbbind', 'drugscore_pdbbind', 'dfire_iso_pdbbind', 'despot_ca_pdbbind', 'dfire_ca_pdbbind'
+    'despot_pdbbind', 'despot_crown_train', 'despot_crown_xtal',
+    'korp_pdbbind', 'korp_crown_train', 'korp_crown_xtal',
+    'drugscore_pdbbind', 'drugscore_crown_train', 'drugscore_crown_xtal',
+    'dfire_pdbbind', 'dfire_crown_train', 'dfire_crown_xtal',
+    'drugscore2018', 'glide', 'gold', 'chemscore',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'KORP-PL', 'DFIRE', 'DRUGSCORE', 'DFIRE-ISO', 'DESPOT-CA', 'DFIRE-CA'
+    'DESPOT-PDBBind', 'DESPOT', 'DESPOT-xtal',
+    'KORP-PDBBind', 'KORP (own)', 'KORP-xtal',
+    'DRUGSCORE-PDBBind', 'DRUGSCORE (own)', 'DRUGSCORE-xtal',
+    'DFIRE-PDBBind', 'DFIRE', 'DFIRE-xtal',
+    'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'ChemScore'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
@@ -93,7 +101,7 @@ Z_NAMES_CLEAN = [
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
+    parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
     args = parser.parse_args()
 
     DATABASE = args.database

@@ -10,6 +10,7 @@ from typing import Tuple, Dict
 import numpy as np
 import pandas as pd
 from biopandas.mol2 import PandasMol2
+import io
 
 # Standard SYBYL type to element mapping
 ELEMENT_DICT: Dict[str, str] = {
@@ -43,7 +44,11 @@ class MOL2Reader:
         adj_matrix : np.ndarray
             Adjacency matrix with bond orders
         """
-        df = PandasMol2().read_mol2(str(self.file_path)).df
+        try:
+            df = PandasMol2().read_mol2(str(self.file_path)).df
+        except Exception as e:
+            df = read_mol2_safe(str(self.file_path)).df
+
         df.rename(columns={'atom_type': 'sybyl_type'}, inplace=True)
         
         adj_matrix = self._parse_bonds(len(df))

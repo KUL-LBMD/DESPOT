@@ -1,33 +1,24 @@
 from src.config import DATA_DIR
-from src.core.score_builder import DESPOT_Builder, DESPOT_DS_Builder, DFIRE_Builder, DFIRE_Isotropic_Builder
+from src.core.score_builder import DESPOT_Builder, DESPOT_DS_Builder, DFIRE_Builder
 import argparse
 
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
+	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
 	args = parser.parse_args()
 
 	DATABASE = args.database
 
 	# Build scores
 	print('Building DESPOT')
-
-#	for smooth_mode in ['SH']:
-
-#		print(smooth_mode)
-#		builder = DESPOT_Builder(database = DATABASE, ref_mode = 'uniform', smooth_mode = smooth_mode)
-#		rho = builder.blur_counts()
-#		prob, cond_prob = builder.counts_to_prob(rho)
-#		del rho
-
-#		for ref_mode in ['uniform']:
-#			print(f'\n=== ref_mode = {ref_mode!r} ===')
-#			builder.ref_mode = ref_mode
-#			print('Computing reference probability')
-#			ref_prob = builder.ref_probs(prob, cond_prob)
-#			print('Running inverse Boltzmann')
-#			builder.inverse_boltzmann(cond_prob, ref_prob)
+	builder = DESPOT_Builder(database = DATABASE)
+	rho = builder.counts_to_rho()
+	rho = builder.add_void(rho)
+	cond_prob = builder.get_cond_prob(rho)
+	ref_prob = builder.get_ref_prob(rho)
+	del rho
+	builder.inverse_boltzmann(cond_prob, ref_prob)
 
 	print('Building DESPOT-DS')
 	builder = DESPOT_DS_Builder(DATABASE)
@@ -38,13 +29,9 @@ if __name__ == '__main__':
 	builder.inverse_boltzmann()
 
 	print('Building DFIRE')
-#	builder = DFIRE_Builder(DATABASE)
-#	rho = builder.blur_counts()
-#	rho_ref = builder.ref_probs(rho)
-#	builder.inverse_boltzmann(rho, rho_ref)
-
-	print('Building DFIRE-Iso')
-	builder = DFIRE_Isotropic_Builder(DATABASE)
-	rho = builder.blur_counts()
-	rho_ref = builder.ref_probs(rho)
-	builder.inverse_boltzmann(rho, rho_ref)
+	builder = DFIRE_Builder(DATABASE)
+	rho = builder.counts_to_rho()
+	cond_prob = builder.get_cond_prob(rho)
+	ref_prob = builder.get_ref_prob(rho)
+	del rho
+	builder.inverse_boltzmann(cond_prob, ref_prob)

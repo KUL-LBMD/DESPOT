@@ -245,6 +245,9 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     for i, score in enumerate(score_names):
         rank_values = spearman_arr[i, :]
         rank_dict[score] = bca_mean_ci(rank_values)
+
+    print(f'Score dict: {score_dict}')
+    print(f'Rank dict: {rank_dict}')
     
     # Compute EF statistics for 1%, 2%, 5%
     ef_dicts = []
@@ -353,13 +356,13 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     plot_ci_horizontal(name_map, ax_pearson, score_dict, methods_pearson, groups_pearson,
                        xlabel='Pearson correlation (90% CI)', stat_key='estimate')
     ax_pearson.set_title('(A) Scoring power', loc='left', fontweight='bold', fontsize=9)
-    ax_pearson.set_xlim(0.0, 1.0)
+#    ax_pearson.set_xlim(0.0, 1.0)
     
     # Row 1: Spearman correlation
     plot_ci_horizontal(name_map, ax_spearman, rank_dict, methods_spearman, groups_spearman,
                        xlabel='Mean Spearman ρ (90% CI)', stat_key='mean')
     ax_spearman.set_title('(B) Ranking power', loc='left', fontweight='bold', fontsize=9)
-    ax_spearman.set_xlim(0.0, 1.0)
+#    ax_spearman.set_xlim(0.0, 1.0)
     
     # Row 2: Docking success rate
     docking_labels = ['Top-1', 'Top-2', 'Top-3']

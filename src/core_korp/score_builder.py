@@ -266,7 +266,7 @@ class DFIRE_Builder:
     def blur_counts(self):
 
         # Load raw counts
-        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_ca_counts_{self.database.lower()}.npz')
         counts = loaded['counts'].astype(np.float32)
 
         ### Step 1: volume normalization ###
