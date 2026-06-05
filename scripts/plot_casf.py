@@ -24,18 +24,18 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_hiqbind', 'despot_crown_train', 'despot_crown_xtal',
-    'korp_pdbbind', 'korp_crown_train', 'korp_crown_xtal',
-    'drugscore_pdbbind', 'drugscore_crown_train', 'drugscore_crown_xtal',
-    'dfire_pdbbind', 'dfire_crown_train', 'dfire_crown_xtal',
+    'despot_hiqbind', 'despot_pdbbind', 'despot_crown_xtal',
+    'korp_hiqbind', 'korp_crown_train', 'korp_crown_xtal',
+    'drugscore_hiqbind', 'drugscore_crown_train', 'drugscore_crown_xtal',
+    'dfire_hiqbind', 'dfire_crown_train', 'dfire_crown_xtal',
     'drugscore2018', 'glide', 'gold', 'chemscore',
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT-HIQBind', 'DESPOT', 'DESPOT-xtal',
-    'KORP-PDBBind', 'KORP (own)', 'KORP-xtal',
-    'DRUGSCORE-PDBBind', 'DRUGSCORE (own)', 'DRUGSCORE-xtal',
-    'DFIRE-PDBBind', 'DFIRE', 'DFIRE-xtal',
+    'DESPOT-HIQBind', 'DESPOT-PDBBind', 'DESPOT-xtal',
+    'KORP-HIQBind', 'KORP (own)', 'KORP-xtal',
+    'DRUGSCORE-HIQBind', 'DRUGSCORE (own)', 'DRUGSCORE-xtal',
+    'DFIRE-HIQBind', 'DFIRE', 'DFIRE-xtal',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'ChemScore'
 ]
 

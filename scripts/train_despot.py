@@ -13,10 +13,9 @@ if __name__ == '__main__':
 	# Build scores
 	print('Building DESPOT')
 	builder = DESPOT_Builder(database = DATABASE)
-	rho = builder.counts_to_rho()
-	cond_prob = builder.get_cond_prob(rho)
-	ref_prob = builder.get_ref_prob(rho)
-	del rho
+	rho = builder.blur_counts()
+	prob, cond_prob = builder.counts_to_prob(rho)
+	ref_prob = builder.ref_probs(prob, cond_prob)
 	builder.inverse_boltzmann(cond_prob, ref_prob)
 
 	print('Building DESPOT-DS')
