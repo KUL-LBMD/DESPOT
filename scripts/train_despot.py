@@ -14,7 +14,6 @@ if __name__ == '__main__':
 	print('Building DESPOT')
 	builder = DESPOT_Builder(database = DATABASE)
 	rho = builder.counts_to_rho()
-	rho = builder.add_void(rho)
 	cond_prob = builder.get_cond_prob(rho)
 	ref_prob = builder.get_ref_prob(rho)
 	del rho

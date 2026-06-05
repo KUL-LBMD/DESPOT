@@ -347,6 +347,7 @@ class DESPOT_Scorer:
         self.types_set_3d = set(self.types_list_3d)
 
         loaded = np.load(DATA_DIR / 'potentials' / f'{self.mode}_scores_{self.database.lower()}.npz')
+        print(f'{self.mode}_scores_{self.database.lower()}.npz')
 
         self.scores_1d = np.ascontiguousarray(loaded['scores_1d'].astype(np.float32))
         self.scores_2d = np.ascontiguousarray(loaded['scores_2d'].astype(np.float32))

@@ -24,7 +24,7 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_pdbbind', 'despot_crown_train', 'despot_crown_xtal',
+    'despot_hiqbind', 'despot_crown_train', 'despot_crown_xtal',
     'korp_pdbbind', 'korp_crown_train', 'korp_crown_xtal',
     'drugscore_pdbbind', 'drugscore_crown_train', 'drugscore_crown_xtal',
     'dfire_pdbbind', 'dfire_crown_train', 'dfire_crown_xtal',
@@ -32,7 +32,7 @@ NAME_LIST = [
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT-PDBBind', 'DESPOT', 'DESPOT-xtal',
+    'DESPOT-HIQBind', 'DESPOT', 'DESPOT-xtal',
     'KORP-PDBBind', 'KORP (own)', 'KORP-xtal',
     'DRUGSCORE-PDBBind', 'DRUGSCORE (own)', 'DRUGSCORE-xtal',
     'DFIRE-PDBBind', 'DFIRE', 'DFIRE-xtal',
