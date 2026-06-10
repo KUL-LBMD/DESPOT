@@ -192,17 +192,33 @@ class DESPOT_Builder:
         broadcasts against cond_prob in inverse_boltzmann the same way.
         """
 
-        wp = np.sum(prob[:, :-1, :, :, :], axis = (1, 2, 3, 4))  # (P,)
-        wp = wp / np.sum(wp)
+        volume_corrections_3d = np.zeros((prob.shape[2], prob.shape[3], prob.shape[4]), dtype = np.float32)
+        for i in range(volume_corrections_3d.shape[0]):
+            r_i, r_e = self.r_bins[i], self.r_bins[i+1]
+            r_mid = (r_i + r_e) / 2
+            r_factor = r_mid**2 * (r_e - r_i)
 
-        # Spatially-uniform mean of P(l | p, r, theta, phi) over the
-        # (r, lat, lon) grid bins.
-        mean_plr = np.mean(cond_prob, axis = (3, 4))  # (P, L+1, r)
+            for j in range(volume_corrections_3d.shape[1]):
+                theta_i, theta_e = self.theta_bins[j], self.theta_bins[j+1]
+                theta_mid = (theta_i + theta_e) / 2
+                theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
 
-        # Weighted sum over protein types -> P(l), shape (L+1,)
-        mean_lr = np.sum(wp[:, np.newaxis, np.newaxis] * mean_plr, axis = 0) + 1e-12 # [l,r]
-        print(f'Sum over P(l | r): {np.sum(mean_lr, axis = 0)}')
-        return mean_lr[np.newaxis, :, :, np.newaxis, np.newaxis]
+                for k in range(volume_corrections_3d.shape[2]):
+                    phi_i, phi_e = self.phi_bins[k], self.phi_bins[k+1]
+                    phi_factor = phi_e - phi_i
+
+                    # Multiply by factor 4: with 2 unsigned axes, 4 voxels are always equivalent
+                    volume_corrections_3d[i,j,k] = phi_factor * theta_factor * r_factor
+
+        volume_corrections_3d = volume_corrections_3d / np.sum(volume_corrections_3d) # L1-normalization
+
+        wpl = np.sum(prob[:, :-1, :, :, :] * volume_corrections_3d[np.newaxis, np.newaxis, :, :, :], axis = (2, 3, 4))  # [p,l]
+        wp = np.sum(wpl, axis = 1, keepdims = True) # [p,l]
+        ref_init = wpl / wp
+        probes = np.full((ref_init.shape[0], 1), 1.0)
+        ref = np.concatenate([ref_init, probes], axis = 1) + 1e-12
+
+        return ref[:, :, np.newaxis, np.newaxis, np.newaxis]
 
     def inverse_boltzmann(self, cond_prob, ref_prob):
         """
