@@ -183,6 +183,11 @@ class DESPOT_Counter:
 
                     if not np.isnan(v2[0]):
                         cos_theta = np.abs(np.dot(int_vector, v1) / np.linalg.norm(int_vector))
+
+                        if np.isnan(cos_theta):
+                            print(f'v1: {v1} - int_vector: {int_vector}')
+                            continue
+
                         theta = np.degrees(np.arccos(np.clip(cos_theta, 0.0, 1.0)))
                         theta = np.clip(theta, 0.01, 89.99)
                         theta_idx = int(theta / 3)

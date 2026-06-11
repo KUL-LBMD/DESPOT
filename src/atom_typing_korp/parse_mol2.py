@@ -202,8 +202,8 @@ class MolConverter:
         
         # === SINGLE PASS: Type atoms ===
         atom_types = self.ligand_typer.process_atoms(mol_data)
-        mol_data.df['prot_type'] = atom_types
-        mol_data.df['lig_type'] = mol_data.df['prot_type'].apply(lambda x: x.split('_')[0])
+        mol_data.df['lig_type'] = atom_types
+        mol_data.df['prot_type'] = mol_data.df['lig_type']
 
         # Select output columns
         cols = [

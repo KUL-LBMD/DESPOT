@@ -206,7 +206,7 @@ class MolConverter:
             self.typer_with_vectors.process_atoms(mol_data)
         
         mol_data.df['prot_type'] = prot_types
-        mol_data.df['lig_type'] = mol_data.df['prot_type'].apply(lambda x: x.split('_')[0])
+        mol_data.df['lig_type'] = mol_data.df['prot_type']
         mol_data.df['hybridization'] = hybridizations
         mol_data.df[['v1_x', 'v1_y', 'v1_z']] = v1_arr
         mol_data.df[['v2_x', 'v2_y', 'v2_z']] = v2_arr
