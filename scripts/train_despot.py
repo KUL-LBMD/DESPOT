@@ -25,11 +25,3 @@ if __name__ == '__main__':
 	builder.cluster_probs()
 	builder.ref_probs()
 	builder.inverse_boltzmann()
-
-	print('Building DFIRE')
-	builder = DFIRE_Builder(DATABASE)
-	rho = builder.counts_to_rho()
-	cond_prob = builder.get_cond_prob(rho)
-	ref_prob = builder.get_ref_prob(rho)
-	del rho
-	builder.inverse_boltzmann(cond_prob, ref_prob)

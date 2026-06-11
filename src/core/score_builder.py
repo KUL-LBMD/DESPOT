@@ -149,18 +149,19 @@ class DESPOT_Builder:
             for j in range(rho.shape[1]):
                 print(f'{i} / {rho.shape[0]} - {j} / {rho.shape[1]}')
                 for k in range(rho.shape[2]):
-                    X = np.clip(rho[i,j,k,:,:], a_min = 1e-12, a_max = None)
-                    log_X = np.log(X)
-                    Xgrid = pysh.SHGrid.from_array(log_X)
+                    X = rho[i,j,k,:,:]
+                    Xgrid = pysh.SHGrid.from_array(X)
                     Xcoeff = Xgrid.expand()
                     l = np.arange(Xcoeff.lmax + 1)
-                    lowpass_filter = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
+                    gauss = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
+                    hann    = 0.5 * (1 + np.cos(np.pi * l / l[-1]))      # 0 at lmax
+                    lowpass = gauss * hann
                     filtered_coeffs = Xcoeff.copy()
                     for l_idx in range(Xcoeff.lmax + 1):
-                        filtered_coeffs.coeffs[:, l_idx, :l_idx+1] *= lowpass_filter[l_idx]
+                        filtered_coeffs.coeffs[:, l_idx, :l_idx+1] *= lowpass[l_idx]
                     smoothed_grid = filtered_coeffs.expand(extend = False)
-                    Xsmooth = smoothed_grid.to_array()
-                    rho[i,j,k,:,:] = np.exp(Xsmooth)
+                    Xsmooth = smoothed_grid.to_array().clip(min = 0)
+                    rho[i,j,k,:,:] = Xsmooth
 
         return rho
     
