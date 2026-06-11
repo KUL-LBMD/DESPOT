@@ -154,7 +154,8 @@ class DESPOT_Builder:
                     Xcoeff = Xgrid.expand()
                     l = np.arange(Xcoeff.lmax + 1)
                     gauss = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
-                    hann    = 0.5 * (1 + np.cos(np.pi * l / l[-1]))      # 0 at lmax
+                    hann = 0.5 * (1 + np.cos(np.pi * l / l[-1]))      # 0 at lmax
+                    lanczos = np.sinc(l / (l[-1] + 1))
                     lowpass = gauss * hann
                     filtered_coeffs = Xcoeff.copy()
                     for l_idx in range(Xcoeff.lmax + 1):

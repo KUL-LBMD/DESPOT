@@ -66,7 +66,9 @@ class KORP_Builder:
                     Xgrid = pysh.SHGrid.from_array(X)
                     Xcoeff = Xgrid.expand()
                     l = np.arange(Xcoeff.lmax + 1)
-                    lowpass_filter = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
+                    gauss = np.exp(-0.5  * l * (l + 1) * self.sigma_angle**2)
+                    hann = 0.5 * (1 + np.cos(np.pi * l / l[-1]))      # 0 at lmax
+                    lowpass_filter = gauss * hann
                     filtered_coeffs = Xcoeff.copy()
                     for l_idx in range(Xcoeff.lmax + 1):
                         filtered_coeffs.coeffs[:, l_idx, :l_idx+1] *= lowpass_filter[l_idx]
