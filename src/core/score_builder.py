@@ -79,7 +79,7 @@ class DESPOT_Builder:
         """
 
         # Load raw counts
-        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz')
         counts_1d = loaded['arr_1d'].astype(np.float32)
         counts_2d = loaded['arr_2d'].astype(np.float32)
         counts_3d = loaded['arr_3d'].astype(np.float32)
@@ -221,9 +221,9 @@ class DESPOT_Builder:
 
         volume_corrections_3d = volume_corrections_3d / np.sum(volume_corrections_3d) # L1-normalization
 
-        ref_prob = np.sum(cond_prob[:, :, -1, :, :] * volume_corrections_3d[np.newaxis, np.newaxis, :, :], axis = (2,3)) + 1e-12 # [p,l]
-        return ref_prob[:, :, np.newaxis, np.newaxis, np.newaxis]
-
+        ref_init = np.sum(cond_prob[:, :, -1, :, :] * volume_corrections_3d[np.newaxis, np.newaxis, :, :], axis = (2,3)) + 1e-12 # [p,l]
+        ref_prob = np.mean(ref_init, axis = 0)
+        return ref_prob[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis]
 
     def inverse_boltzmann(self, cond_prob, ref_prob):
         """
