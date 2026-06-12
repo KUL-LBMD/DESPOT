@@ -207,23 +207,9 @@ class DESPOT_Builder:
         broadcasts against cond_prob in inverse_boltzmann the same way.
         """
 
-        volume_corrections_3d = np.zeros((cond_prob.shape[3], cond_prob.shape[4]), dtype = np.float32)
-        for j in range(volume_corrections_3d.shape[0]):
-            theta_i, theta_e = self.theta_bins[j], self.theta_bins[j+1]
-            theta_mid = (theta_i + theta_e) / 2
-            theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
-
-            for k in range(volume_corrections_3d.shape[1]):
-                phi_i, phi_e = self.phi_bins[k], self.phi_bins[k+1]
-                phi_factor = phi_e - phi_i
-
-                volume_corrections_3d[j,k] = phi_factor * theta_factor
-
-        volume_corrections_3d = volume_corrections_3d / np.sum(volume_corrections_3d) # L1-normalization
-
-        ref_init = np.sum(cond_prob[:, :, -1, :, :] * volume_corrections_3d[np.newaxis, np.newaxis, :, :], axis = (2,3)) + 1e-12 # [p,l]
-        ref_prob = np.mean(ref_init, axis = 0)
-        return ref_prob[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis]
+        ref_init = np.sum(cond_prob * self.volume_corrections_3d[np.newaxis, np.newaxis, :, :, :], axis = (2,3,4)) + 1e-12 # [p,l]
+        ref_prob = np.mean(ref_init, axis = 0) # [l]
+        return ref_init[:, :, np.newaxis, np.newaxis, np.newaxis]
 
     def inverse_boltzmann(self, cond_prob, ref_prob):
         """

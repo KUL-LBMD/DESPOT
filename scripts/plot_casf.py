@@ -24,7 +24,7 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_train', 'korp_crown_train', 'drugscore_crown_train',
+    'despot_crown_xtal', 'korp_crown_train', 'drugscore_crown_train',
     'dsx', 'asp', 'autodockvina', 'drugscore_csd', 
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
     'chemplp', 'gbvi_wsa', 'deltavina', 'korp_pl'
