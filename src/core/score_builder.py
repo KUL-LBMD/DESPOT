@@ -191,19 +191,12 @@ class DESPOT_Builder:
         lig_sum = np.sum(rho, axis = 1) # [p,r, theta, phi]
         xi = np.max(lig_sum, axis = (1,2,3), keepdims = True)
         decoy_vals = xi - lig_sum # Add void count to density, such that total density is equal across all spherical voxels
-        rho_new = np.concatenate((rho, decoy_vals[:, np.newaxis, :, :, :]), axis = 1) # [p, l+1, r, theta, phi]
+        rho = np.concatenate((rho, decoy_vals[:, np.newaxis, :, :, :]), axis = 1) # [p, l+1, r, theta, phi]
 
-        # Re-normalize
-        rho_sum = np.sum(rho, axis = (1,2,3,4)) # [p]
-        rho_new_sum = np.sum(rho_new, axis = (1,2,3,4)) # [p]
-        rho = rho_new * (rho_sum / rho_new_sum)[:, np.newaxis, np.newaxis, np.newaxis, np.newaxis] # Rescale to keep P(p) constant
-
-        prob = rho / np.sum(rho) # L1-normalization to get P(p, l, r, theta, phi)
-        del rho
-        cond_prob = prob / np.sum(prob, axis = 1, keepdims = True) # P(l | p,r,theta,phi)
-        return prob, cond_prob
+        cond_prob = rho / np.sum(rho, axis = 1, keepdims = True) # P(l | p,r,theta,phi)
+        return cond_prob
     
-    def ref_probs(self, prob, cond_prob):
+    def ref_probs(self, cond_prob):
         """
         Compute the reference distribution P(l) according to self.ref_mode.
 
@@ -214,16 +207,22 @@ class DESPOT_Builder:
         broadcasts against cond_prob in inverse_boltzmann the same way.
         """
 
-        wp = np.sum(prob[:, :-1, :, :, :], axis = (1, 2, 3, 4))  # P(p) [p]
-        wp /= wp.sum()
-        print(f'P(p) sum: {np.sum(wp)}')
+        volume_corrections_3d = np.zeros((cond_prob.shape[3], cond_prob.shape[4]), dtype = np.float32)
+        for j in range(volume_corrections_3d.shape[0]):
+            theta_i, theta_e = self.theta_bins[j], self.theta_bins[j+1]
+            theta_mid = (theta_i + theta_e) / 2
+            theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
 
-        p_pl = np.mean(cond_prob, axis = (2, 3, 4)) # P(l | p)
+            for k in range(volume_corrections_3d.shape[1]):
+                phi_i, phi_e = self.phi_bins[k], self.phi_bins[k+1]
+                phi_factor = phi_e - phi_i
 
-        ref = wp @ p_pl # [l]
-        print(f'P(l) sum: {np.sum(ref)}')
+                volume_corrections_3d[j,k] = phi_factor * theta_factor
 
-        return ref[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis]
+        volume_corrections_3d = volume_corrections_3d / np.sum(volume_corrections_3d) # L1-normalization
+
+        ref_prob = np.sum(cond_prob[:, :, -1, :, :] * volume_corrections_3d[np.newaxis, np.newaxis, :, :], axis = (2,3)) + 1e-12 # [p,l]
+        return ref_prob[:, :, np.newaxis, np.newaxis, np.newaxis]
 
     def inverse_boltzmann(self, cond_prob, ref_prob):
         """

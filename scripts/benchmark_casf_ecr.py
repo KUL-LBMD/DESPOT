@@ -25,11 +25,11 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_pdbbind', 'drugscore_pdbbind', 'korp_pdbbind'
+    'despot_crown_train', 'korp_crown_train', 'glide', 'deltavina'
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'DRUGSCORE', 'KORP-PL'
+    'DESPOT', 'KORP-PL (CROWN)', 'GlideScore-SP', 'ΔVinaRF20'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
@@ -63,9 +63,10 @@ SCORE_CATEGORY = {
 #ERC_PARTNERS = ['dsx', 'asp', 'drugscore_csd', 'drugscore2018', 'gold', 'pmf', 'chemscore', 'gbvi_wsa', 'deltavina', 'glide', 'chemplp', 'autodockvina']
 
 ERC_COMBOS = [
-    ['despot_pdbbind', 'korp_pdbbind'],
-    ['despot_pdbbind', 'drugscore_pdbbind'],
-    ['drugscore_pdbbind', 'korp_pdbbind'],
+    ['despot_crown_train', 'korp_crown_train'],
+    ['despot_crown_train', 'glide'],
+    ['despot_crown_train', 'deltavina'],
+    ['despot_crown_train', 'korp_crown_train', 'glide', 'deltavina']
 ]
 
 ERC_CONFIG = {
@@ -75,9 +76,10 @@ ERC_CONFIG = {
 }
 
 ERC_NAMES_CLEAN = [
-    'DESPOT + KORP-PL (ERC)',
-    'DESPOT + DRUGSCORE (ERC)',
-    'DRUGSCORE + KORP-PL (ERC)',
+    'DESPOT + KORP-PL',
+    'DESPOT + GlideScore-SP',
+    'DESPOT + ΔVinaRF20',
+    'DESPOT + KORP-PL + GlideScore-SP + ΔVinaRF20'
 ]
 
 if __name__ == '__main__':

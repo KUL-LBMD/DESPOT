@@ -24,19 +24,18 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_hiqbind', 'despot_pdbbind', 'despot_crown_xtal',
-    'korp_hiqbind', 'korp_crown_train', 'korp_crown_xtal',
-    'drugscore_hiqbind', 'drugscore_crown_train', 'drugscore_crown_xtal',
-    'dfire_hiqbind', 'dfire_crown_train', 'dfire_crown_xtal',
-    'drugscore2018', 'glide', 'gold', 'chemscore',
+    'despot_crown_train', 'korp_crown_train', 'drugscore_crown_train',
+    'dsx', 'asp', 'autodockvina', 'drugscore_csd', 
+    'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
+    'chemplp', 'gbvi_wsa', 'deltavina', 'korp_pl'
+    
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT-HIQBind', 'DESPOT-PDBBind', 'DESPOT-xtal',
-    'KORP-HIQBind', 'KORP (own)', 'KORP-xtal',
-    'DRUGSCORE-HIQBind', 'DRUGSCORE (own)', 'DRUGSCORE-xtal',
-    'DFIRE-HIQBind', 'DFIRE', 'DFIRE-xtal',
-    'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'ChemScore'
+    'DESPOT', 'KORP-PL (CROWN)', 'DRUGSCORE (CROWN)',
+    'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
+    'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
+    'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20', 'KORP-PL'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
