@@ -79,7 +79,7 @@ class DESPOT_Builder:
         """
 
         # Load raw counts
-        loaded = np.load(DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'dfire_counts_{self.database.lower()}.npz')
         counts_1d = loaded['arr_1d'].astype(np.float32)
         counts_2d = loaded['arr_2d'].astype(np.float32)
         counts_3d = loaded['arr_3d'].astype(np.float32)
@@ -207,8 +207,23 @@ class DESPOT_Builder:
         broadcasts against cond_prob in inverse_boltzmann the same way.
         """
 
-        ref_prob = np.sum(cond_prob * self.volume_corrections_3d[np.newaxis, np.newaxis, :, :, :], axis = (2,3,4)) + 1e-12 # [p,l]
+        volume_corrections_3d = np.zeros((cond_prob.shape[3], cond_prob.shape[4]), dtype = np.float32)
+        for j in range(volume_corrections_3d.shape[0]):
+            theta_i, theta_e = self.theta_bins[j], self.theta_bins[j+1]
+            theta_mid = (theta_i + theta_e) / 2
+            theta_factor = np.sin(theta_mid) * (theta_e - theta_i)
+
+            for k in range(volume_corrections_3d.shape[1]):
+                phi_i, phi_e = self.phi_bins[k], self.phi_bins[k+1]
+                phi_factor = phi_e - phi_i
+
+                volume_corrections_3d[j,k] = phi_factor * theta_factor
+
+        volume_corrections_3d = volume_corrections_3d / np.sum(volume_corrections_3d) # L1-normalization
+
+        ref_prob = np.sum(cond_prob[:, :, -1, :, :] * volume_corrections_3d[np.newaxis, np.newaxis, :, :], axis = (2,3)) + 1e-12 # [p,l]
         return ref_prob[:, :, np.newaxis, np.newaxis, np.newaxis]
+
 
     def inverse_boltzmann(self, cond_prob, ref_prob):
         """
@@ -219,6 +234,7 @@ class DESPOT_Builder:
         scores = cond_prob / ref_prob
         scores = np.clip(scores, eps, None)
         scores = np.clip(-1 * np.log10(scores), a_min = -5, a_max = 5)
+        scores = scores[:, :, :50, :, :]
 
         # Split back by symmetry class
         i1 = len(self.types_list_1d)
