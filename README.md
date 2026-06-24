@@ -18,7 +18,7 @@ pip install -e .
 
 ### 2. Download models and datasets
 
-Download the pre-trained DESPOT models and CASF benchmark test set:
+Download the pre-trained DESPOT models and CASF benchmark test set from [Zenodo](https://zenodo.org/records/20829559)
 
 ```bash
 bash download_dataset.sh
