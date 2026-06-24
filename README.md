@@ -18,11 +18,29 @@ pip install -e .
 
 ### 2. Download models and datasets
 
-Download the pre-trained DESPOT models and CASF benchmark test set from [Zenodo](https://zenodo.org/records/20829559)
+Download the pre-trained DESPOT models and datasets from [Zenodo](https://zenodo.org/records/20829559). Run the script from the **root of the repository** — it creates a `data/` directory and extracts the archives there, verifying each against its published MD5 checksum.
+
+By default, only the two archives required to run DESPOT are downloaded: `metadata.tar.gz` and `potentials.tar.gz` (~1.9 GB).
 
 ```bash
-bash download_dataset.sh
+# Essential only: metadata + potentials (~1.9 GB)
+bash download_data.sh
 ```
+
+To additionally download the optional benchmark and training sets — `casf_2016.tar.gz`, `crown_train.tar.gz`, and `hiqbind_train.tar.gz` (~23.7 GB total) — pass the `--all` flag:
+
+```bash
+# All 5 archives (~23.7 GB download, ~35 GB extracted)
+bash download_data.sh --all
+```
+
+| Archive | Contents | Download |
+|---|---|---|
+| `metadata.tar.gz` | Atom type definitions + training set metadata | default |
+| `potentials.tar.gz` | Trained DESPOT models (DESPOT + DESPOT-DRUGSCORE) | default |
+| `casf_2016.tar.gz` | CASF-2016 benchmark set | `--all` |
+| `crown_train.tar.gz` | CROWN training set | `--all` |
+| `hiqbind_train.tar.gz` | HiQBind training set | `--all` |
 
 ## Usage
 
@@ -38,7 +56,7 @@ python scripts/score_complex.py \
   -l 6hdt_ligand.mol2 \
   -o test_score.csv \
   -m full \
-  --database CROWN_leaky \
+  --database CROWN \
   --bfac
 ```
 
@@ -48,7 +66,7 @@ python scripts/score_complex.py \
 | `-l` / `--ligand` | Path to ligand (multi-)`.mol2` file **(required)** |
 | `-o` / `--outpath` | Path to output CSV file **(required)** |
 | `-m` / `--mode` | DESPOT mode: `full` or `ds` (default: `full`) |
-| `--database` | Training source: `CROWN_train`, `CROWN_Xtal`, or `CROWN_leaky` (default: `CROWN_train`) |
+| `--database` | Training source: `CROWN` or `HiQBind` (default: `CROWN`) |
 | `--bfac` | Write per-pose PDB files with atom-wise scores as B-factors |
 
 The output CSV contains ligand identifiers and binding scores, where lower (more negative) scores indicate stronger predicted binding affinity.
@@ -63,7 +81,7 @@ python scripts/make_voxel_channel.py \
   --pocket 6hdt_pocket.pqr \
   --channel O.co2_1 \
   --output test_voxel.pdb \
-  --database CROWN_leaky
+  --database CROWN
 ```
 
 | Option | Description |
@@ -72,7 +90,7 @@ python scripts/make_voxel_channel.py \
 | `--pocket` | Path to FPocket `.pqr` file for pocket definition **(required)** |
 | `--channel` | Ligand atom type for the MIF channel (e.g., `O.co2_1`) **(required)** |
 | `--output` | Path to output `.pdb` file **(required)** |
-| `--database` | Training source: `CROWN_train`, `CROWN_Xtal`, or `CROWN_leaky` (default: `CROWN_train`) |
+| `--database` | Training source: `CROWN` or `HiQBind` (default: `CROWN`) |
 
 See the supplementary information of the paper for full atom type definitions.
 
@@ -86,18 +104,15 @@ To retrain DESPOT from scratch:
 
 ```bash
 # 1. Count interactions and train models
-python scripts/count_interactions.py --database CROWN_train
-python scripts/train_despot.py --database CROWN_train
+python scripts/train.py
 
 # 2. Benchmark on CASF
-python scripts/benchmark_casf.py --database CROWN_train
+python scripts/benchmark_casf.py
 ```
-
-All training scripts accept `--database` with options `CROWN_train`, `CROWN_Xtal`, or `CROWN_leaky`.
 
 ## CROWN Dataset
 
-DESPOT is trained on the [CROWN](https://github.com/KUL-LBMD/CROWN) (Curated Repository Of Well-resolved Non-covalent interactions) dataset, a curated collection of 153,005 protein–ligand complexes. The dataset can be browsed and searched interactively at [crown.lbmd.be](https://crown.lbmd.be), or downloaded in bulk from [Zenodo](https://zenodo.org/records/19334311).
+DESPOT is trained on the [CROWN](https://github.com/KUL-LBMD/CROWN) (Curated Repository Of Well-resolved Non-covalent interactions) dataset, a curated collection of 141,261 protein–ligand complexes. The dataset can be browsed and searched interactively at [crown.lbmd.be](https://crown.lbmd.be), or downloaded in bulk from [Zenodo](https://zenodo.org/records/19334311).
 
 ## Citation
 
