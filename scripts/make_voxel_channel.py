@@ -26,7 +26,7 @@ def parse_arguments():
     parser.add_argument('--pocket', help = 'FPocket pqr file used for centroid estimation')
     parser.add_argument('--channel', help = 'Ligand channel used for voxel scoring')
     parser.add_argument('--output', help = 'Path to output pdb file')
-    parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky'], default = 'CROWN_train',
+    parser.add_argument('--database', type=str, required=True, choices=['CROWN', 'HiQBind'], default = 'CROWN',
 		help = 'Data source to use')
     
     return parser.parse_args()
@@ -120,7 +120,7 @@ def build_pocket_df(centroid, lig_channel):
     n = len(coords)
     lig_df = pd.DataFrame({
         'atom_id': 'X', 'element': 'X', 'atom_name': 'X',
-        'atom_type': lig_channel, 'sybyl_type': lig_channel,
+        'lig_type': lig_channel, 'sybyl_type': lig_channel,
         'subst_id': 'X', 'subst_name': 'LIG1', 'num_hydrogens': 0,
         'x': coords[:, 0], 'y': coords[:, 1], 'z': coords[:, 2],
         'v1_x': 0, 'v1_y': 0, 'v1_z': 0,
@@ -133,7 +133,7 @@ def build_pocket_df(centroid, lig_channel):
 if __name__ == '__main__':
     args = parse_arguments()
     converter = MolConverter()
-    scorer = DESPOT_Scorer(mode = 'gaussian', database = args.database)
+    scorer = DESPOT_Scorer(mode = 'despot', database = args.database)
 	
     prot_df = converter.convert_mol2(args.protein)
     centroid = get_hull_centroid(args.pocket)
@@ -143,4 +143,3 @@ if __name__ == '__main__':
     lig_df['bfac'] = scores
     lig_df['label_num'] = 0
     write_pdbs(lig_df, [args.output[:-4]], './')
-	
