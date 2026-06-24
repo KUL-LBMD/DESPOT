@@ -23,6 +23,7 @@ dependencies:
   - python-dotenv
   - pip
   - openbabel
+  - pyshtools
   - pip:
       - scikit-posthocs
       - biopandas
