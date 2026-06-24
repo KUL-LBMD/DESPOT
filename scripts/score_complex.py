@@ -35,7 +35,7 @@ def parse_arguments():
 	parser.add_argument('--bfac', action = 'store_true',
 		help = 'Make subdirectory that stores separate PDB file of each ligand pose, with atom-wise score stored as b-factor')
 
-	parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_Xtal', 'CROWN_leaky'], default = 'CROWN_train',
+	parser.add_argument('--database', type=str, required=True, choices=['CROWN', 'HiQBind'], default = 'CROWN',
 		help = 'Data source to use')
 
 	return parser.parse_args()
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 	converter = MolConverter()
 
 	if args.mode == 'full':
-		scorer = DESPOT_Scorer(mode = 'gaussian', database = DATABASE)
+		scorer = DESPOT_Scorer(mode = 'despot', database = DATABASE)
 	else:
 		scorer = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = DATABASE)
 
