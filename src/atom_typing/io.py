@@ -10,6 +10,7 @@ from typing import Tuple, Dict
 import numpy as np
 import pandas as pd
 from biopandas.mol2 import PandasMol2
+import io
 
 # Standard SYBYL type to element mapping
 ELEMENT_DICT: Dict[str, str] = {
@@ -25,12 +26,40 @@ BOND_ORDER_MAP: Dict[str, int] = {
     'ar': 2, 'am': 2, '1': 1, '2': 2, '3': 3
 }
 
+def _fix_mol2(path):
+    with open(path) as f:
+        lines = f.readlines()
+
+    in_atom = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('@<TRIPOS>'):
+            in_atom = stripped == '@<TRIPOS>ATOM'
+            continue
+        if in_atom and stripped:
+            parts = line.split()
+            if len(parts) == 8:                       # atom_name missing
+                # parts = [id, x, y, z, type, subst_id, subst_name, charge]
+                parts.insert(1, parts[4])             # use atom_type as a stand-in name
+                lines[i] = '  '.join(parts) + '\n'
+    return io.StringIO(''.join(lines))
+
+def read_mol2_safe(path):
+    pmol = PandasMol2()
+    pmol.read_mol2_from_list(
+        mol2_lines=_fix_mol2(path).readlines(),
+        mol2_code=path,
+    )
+    return pmol
+
 
 class MOL2Reader:
     """Handles reading and parsing MOL2 files."""
     
     def __init__(self, file_path: Path):
         self.file_path = Path(file_path)
+
+    
     
     def read(self) -> Tuple[pd.DataFrame, np.ndarray]:
         """
@@ -43,7 +72,11 @@ class MOL2Reader:
         adj_matrix : np.ndarray
             Adjacency matrix with bond orders
         """
-        df = PandasMol2().read_mol2(str(self.file_path)).df
+        try:
+            df = PandasMol2().read_mol2(str(self.file_path)).df
+        except Exception as e:
+            df = read_mol2_safe(str(self.file_path)).df
+
         df.rename(columns={'atom_type': 'sybyl_type'}, inplace=True)
         
         adj_matrix = self._parse_bonds(len(df))

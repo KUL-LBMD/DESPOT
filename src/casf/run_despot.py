@@ -9,9 +9,10 @@ import os
 from joblib import Parallel, delayed
 import math
 
-def run_scoring(database):
-	scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database) # DESPOT
-	scorer2 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-Iso
+def run_scoring_despot(database):
+	scorer1 = DESPOT_Scorer(mode = 'despot', database = database) # DESPOT
+	scorer2 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-DS
+     
 	converter = MolConverter()
 
 	# 1.1-1.2: Scoring + ranking power
@@ -41,11 +42,12 @@ def run_scoring(database):
 	df2 = score_df[['pdb_id', 'logKa', 'score2']].copy().rename(columns = {'score2': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
-	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
+	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/drugscore_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
 
-def run_docking(database):
-	scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database) # DESPOT
-	scorer2 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-Iso
+def run_docking_despot(database):
+	scorer1 = DESPOT_Scorer(mode = 'despot', database = database) # DESPOT
+	scorer2 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-DS
+
 	converter = MolConverter()
 
 	print('Starting docking benchmark')
@@ -94,9 +96,9 @@ def run_docking(database):
 	df2 = dock_df[['pdb_id', 'pose_id', 'rmsd', 'score2']].copy().rename(columns = {'score2': 'score'})
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
-	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/despot_ds_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
+	df2.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/drugscore_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
 
-def run_screening(n_jobs=-1, database = 'CROWN'):
+def run_screening_despot(n_jobs=-1, database = 'CROWN'):
     print('Starting screening benchmark')
     molecule_list = [f'{subdir}_{i+1}' for subdir in sorted(os.listdir(DATA_DIR / 'CASF-2016' / 'coreset')) for i in range(100)]
     target_list = sorted(os.listdir(DATA_DIR / 'CASF-2016' / 'decoys_screening'))
@@ -105,8 +107,8 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
 
     def process_target(subdir, database):
         """Process a single target protein against all molecules."""
-        scorer1 = DESPOT_Scorer(mode = 'gaussian', database = database)
-        scorer2 = DESPOT_Isotropic_Scorer(mode='drugscore', database = database)
+        scorer1 = DESPOT_Scorer(mode = 'despot', database = database) # DESPOT
+        scorer2 = DESPOT_Isotropic_Scorer(mode = 'drugscore', database = database) # DESPOT-DS
         converter = MolConverter()
 
         prot_df = converter.convert_mol2(f'{DATA_DIR}/CASF-2016/coreset/{subdir}/{subdir}_protein.mol2')
@@ -146,7 +148,7 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
     )
 
     # Stack results into final array
-    score_arr = np.stack(results, axis=1)  # Shape: (4, n_targets, n_molecules)
+    score_arr = np.stack(results, axis=1)  # Shape: (5, n_targets, n_molecules)
 
     df1 = pd.DataFrame(score_arr[0,:,:], index=target_list, columns=molecule_list)
     df2 = pd.DataFrame(score_arr[1,:,:], index=target_list, columns=molecule_list)
@@ -165,7 +167,7 @@ def run_screening(n_jobs=-1, database = 'CROWN'):
         target_dict[T] = Ls
 
     df_list = [df1, df2]
-    name_list = ['despot', 'despot_ds']
+    name_list = ['despot', 'drugscore']
 
     for df, name in zip(df_list, name_list):
         df_long = (

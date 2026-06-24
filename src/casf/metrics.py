@@ -1,5 +1,4 @@
 from src.config import DATA_DIR
-from src.casf.ecr import add_erc_columns
 
 import numpy as np
 import pandas as pd
@@ -82,14 +81,6 @@ def get_docking_values(name_list, erc_config=None):
 
     # --- ERC consensus scores (per-target ranking for docking) ---
     extended = list(name_list)
-    if erc_config:
-        erc_names = add_erc_columns(
-            merged_df,
-            partner_combos=erc_config['partner_combos'],
-            group_col='pdb_id',            # rank poses within each target
-            sigma_frac=erc_config.get('sigma_frac', 0.05),
-        )
-        extended += erc_names
 
     # --- compute metrics ---
     S = len(extended)
@@ -108,7 +99,7 @@ def get_docking_values(name_list, erc_config=None):
             if idx_list:
                 real_idx = idx_list[0]
             else:
-                real_idx = 4
+                real_idx = 4 # any value >= 3 fails all top-N checks
 
             if real_idx < 3:
                 top_arr[i, 2] += 1 / n_targets
@@ -170,14 +161,6 @@ def get_screening_values(name_list, erc_config=None):
 
     # --- ERC consensus scores (per-target ranking for forward screening) ---
     extended = list(name_list)
-    if erc_config:
-        erc_names = add_erc_columns(
-            merged_df,
-            partner_combos=erc_config['partner_combos'],
-            group_col='pdb_id',            # rank ligands within each target
-            sigma_frac=erc_config.get('sigma_frac', 0.05),
-        )
-        extended += erc_names
 
     # --- compute metrics ---
     S = len(extended)
@@ -206,16 +189,6 @@ def get_screening_values(name_list, erc_config=None):
                 forward_top_arr[i, 0] += 1 / n_proteins
 
     # Reverse screening
-
-    # --- ERC consensus scores (per-ligand ranking for reverse screening) ---
-    if erc_config:
-        erc_names = add_erc_columns(
-            merged_df,
-            partner_combos=erc_config['partner_combos'],
-            group_col='pdb_id',            # rank ligands within each target
-            sigma_frac=erc_config.get('sigma_frac', 0.05),
-        )
-
     unique_ligands = merged_df['ligand_id'].unique()
     n_ligands = len(unique_ligands)
 

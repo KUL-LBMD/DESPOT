@@ -202,10 +202,11 @@ class MolConverter:
             return None
         
         # === SINGLE PASS: Type atoms AND assign vectors ===
-        atom_types, hybridizations, v1_arr, v2_arr, v3_arr = \
+        prot_types, hybridizations, v1_arr, v2_arr, v3_arr = \
             self.typer_with_vectors.process_atoms(mol_data)
         
-        mol_data.df['atom_type'] = atom_types
+        mol_data.df['prot_type'] = prot_types
+        mol_data.df['lig_type'] = mol_data.df['prot_type']
         mol_data.df['hybridization'] = hybridizations
         mol_data.df[['v1_x', 'v1_y', 'v1_z']] = v1_arr
         mol_data.df[['v2_x', 'v2_y', 'v2_z']] = v2_arr
@@ -213,7 +214,7 @@ class MolConverter:
 
         # Select output columns
         cols = [
-            'atom_id', 'element', 'atom_name', 'atom_type', 'sybyl_type', 'subst_id', 
+            'atom_id', 'element', 'atom_name', 'prot_type', 'lig_type', 'sybyl_type', 'subst_id', 
             'subst_name', 'charge', 'hybridization', 'heavy_neighbors', 
             'num_hydrogens', 'x', 'y', 'z', 
             'v1_x', 'v1_y', 'v1_z', 'v2_x', 'v2_y', 'v2_z', 'v3_x', 'v3_y', 'v3_z'

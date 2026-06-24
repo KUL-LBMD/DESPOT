@@ -13,7 +13,6 @@ dependencies:
   - pandas
   - pyarrow
   - scikit-learn
-  - biopython
   - joblib
   - matplotlib
   - seaborn
@@ -23,11 +22,6 @@ dependencies:
   - networkx
   - python-dotenv
   - pip
-  - rdkit
-  - openmm
-  - openmmforcefields
-  - openff-toolkit
-  - pdbfixer
   - openbabel
   - pip:
       - scikit-posthocs

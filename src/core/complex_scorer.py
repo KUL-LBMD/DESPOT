@@ -291,32 +291,50 @@ class DESPOT_Scorer:
     Subsequent calls will be much faster.
     """
 
-    def __init__(self, mode = 'gaussian', database = 'CROWN'):
+    def __init__(self, mode = 'despot', database = 'CROWN'):
 
+        self.mode = mode
         self.database = database
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
-        colname1, colname2 = 'protein_count', 'ligand_count'
+        prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'prot_types.csv')
+        lig_counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'lig_types.csv')
 
-        self.types_list_1d = counts_df.loc[
-            (counts_df['local_reference_frame'] == 'Isotropic') & (counts_df[colname1] > 1000),
-            'atom_type'
-        ].dropna().unique().tolist()
+        self.types_list_1d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Isotropic'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-        self.types_list_2d = counts_df.loc[
-            (counts_df['local_reference_frame'] == 'Axial') & (counts_df[colname1] > 1000),
-            'atom_type'
-        ].dropna().unique().tolist()
+        self.types_list_2d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Axial'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-        self.types_list_3d = counts_df.loc[
-            (counts_df['local_reference_frame'] == 'Anisotropic') & (counts_df[colname1] > 1000),
-            'atom_type'
-        ].dropna().unique().tolist()
+        self.types_list_3d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Anisotropic'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-        self.ligand_types_list = counts_df.loc[
-            (counts_df[colname2] > 500),
-            'atom_type'
-        ].dropna().unique().tolist()
+        self.ligand_types_list = (
+            lig_counts_df['atom_type']
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
         # Type mappings
         self.prot_type_to_idx_1d = {t: i for i, t in enumerate(self.types_list_1d)}
@@ -328,11 +346,8 @@ class DESPOT_Scorer:
         self.types_set_2d = set(self.types_list_2d)
         self.types_set_3d = set(self.types_list_3d)
 
-        # Load scores as contiguous float32 arrays
-        if mode == 'gaussian':
-            loaded = np.load(DATA_DIR / 'potentials' / f'despot_scores_{self.database.lower()}.npz')
-        else:
-            loaded = np.load(DATA_DIR / 'potentials' / f'despot_sh_scores_{self.database.lower()}.npz')
+        loaded = np.load(DATA_DIR / 'potentials' / f'{self.mode}_scores_{self.database.lower()}.npz')
+        print(f'{self.mode}_scores_{self.database.lower()}.npz')
 
         self.scores_1d = np.ascontiguousarray(loaded['scores_1d'].astype(np.float32))
         self.scores_2d = np.ascontiguousarray(loaded['scores_2d'].astype(np.float32))
@@ -380,13 +395,13 @@ class DESPOT_Scorer:
     def score_complex(self, prot_df, lig_df):
         """Score protein-ligand complex."""
         # Extract arrays
-        prot_types = prot_df['atom_type'].values
+        prot_types = prot_df['prot_type'].values
         prot_coords = np.ascontiguousarray(prot_df[['x', 'y', 'z']].values.astype(np.float32))
         v1_arr = np.ascontiguousarray(prot_df[['v1_x', 'v1_y', 'v1_z']].values.astype(np.float32))
         v2_arr = np.ascontiguousarray(prot_df[['v2_x', 'v2_y', 'v2_z']].values.astype(np.float32))
         v3_arr = np.ascontiguousarray(prot_df[['v3_x', 'v3_y', 'v3_z']].values.astype(np.float32))
 
-        lig_types = lig_df['atom_type'].values
+        lig_types = lig_df['lig_type'].values
         lig_coords = np.ascontiguousarray(lig_df[['x', 'y', 'z']].values.astype(np.float32))
         n_lig = len(lig_coords)
 
@@ -507,37 +522,52 @@ def score_iso_kernel(
 class DESPOT_Isotropic_Scorer:
     """Numba-accelerated isotropic-only scorer."""
 
-    def __init__(self, mode, database):
+    def __init__(self, mode = 'drugscore', database = 'CROWN'):
 
+        self.mode = mode
         self.database = database
+        
+        prot_counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'prot_types.csv')
+        lig_counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'lig_types.csv')
 
-        counts_df = pd.read_csv(DATA_DIR / 'metadata' / f'atom_type_counts.csv')
-        colname1, colname2 = 'protein_count', 'ligand_count'
+        self.types_list_1d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Isotropic'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-        if mode == 'mif':
-            loaded = np.load(DATA_DIR / 'potentials' / f'despot_iso_scores_{self.database.lower()}.npz')
-        else:
-            loaded = np.load(DATA_DIR / 'potentials' / f'despot_ds_scores_{self.database.lower()}.npz')
+        self.types_list_2d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Axial'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-        self.types_list_1d = counts_df.loc[
-            (counts_df['local_reference_frame'] == 'Isotropic') & (counts_df[colname1] > 1000),
-            'atom_type'
-        ].dropna().unique().tolist()
+        self.types_list_3d = (
+            prot_counts_df.loc[
+                (prot_counts_df['local_reference_frame'] == 'Anisotropic'),
+                'atom_type'
+            ]
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-        self.types_list_2d = counts_df.loc[
-            (counts_df['local_reference_frame'] == 'Axial') & (counts_df[colname1] > 1000),
-            'atom_type'
-        ].dropna().unique().tolist()
+        self.ligand_types_list = (
+            lig_counts_df['atom_type']
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-        self.types_list_3d = counts_df.loc[
-            (counts_df['local_reference_frame'] == 'Anisotropic') & (counts_df[colname1] > 1000),
-            'atom_type'
-        ].dropna().unique().tolist()
-
-        self.ligand_types_list = counts_df.loc[
-            (counts_df[colname2] > 500),
-            'atom_type'
-        ].dropna().unique().tolist()
+        loaded = np.load(DATA_DIR / 'potentials' / f'{self.mode}_scores_{self.database.lower()}.npz')
 
         self.prot_types_list = self.types_list_1d + self.types_list_2d + self.types_list_3d
         self.prot_type_to_idx = {t: i for i, t in enumerate(self.prot_types_list)}
@@ -551,10 +581,10 @@ class DESPOT_Isotropic_Scorer:
         self.n_r = self.scores_1d.shape[2]
 
     def score_complex(self, prot_df, lig_df):
-        prot_types = prot_df['atom_type'].values
+        prot_types = prot_df['prot_type'].values
         prot_coords = np.ascontiguousarray(prot_df[['x', 'y', 'z']].values.astype(np.float32))
 
-        lig_types = lig_df['atom_type'].values
+        lig_types = lig_df['lig_type'].values
         lig_coords = np.ascontiguousarray(lig_df[['x', 'y', 'z']].values.astype(np.float32))
         n_lig = len(lig_coords)
 

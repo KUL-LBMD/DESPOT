@@ -36,8 +36,8 @@ plt.rcParams.update({
     'font.size': 6,
     'axes.titlesize': 10,
     'axes.labelsize': 8,
-    'xtick.labelsize': 5.5,
-    'ytick.labelsize': 5.5,
+    'xtick.labelsize': 4.5,
+    'ytick.labelsize': 4.5,
     'legend.fontsize': 6,
     'figure.dpi': 300,
     'savefig.dpi': 300,
@@ -71,7 +71,8 @@ SCORE_CATEGORY = {
     'ChemScore': 'empirical',
     'ChemPLP': 'empirical',
     'GBVI-WSA-dG': 'physical',
-    'ΔVinaRF20': 'empirical'
+    'ΔVinaRF20': 'empirical',
+    'KORP-PL': 'kbp'
 }
 
 # ============================================================================
@@ -142,7 +143,7 @@ def plot_ci_horizontal(name_map, ax, stats_dict, methods_sorted, groups, xlabel,
 
     # Make DESPOT labels bold
     for tick_label in ax.get_yticklabels():
-        if 'DESPOT' in tick_label.get_text():
+        if tick_label.get_text() in ['DESPOT']:
             tick_label.set_fontweight('bold')
 
     ax.invert_yaxis()
@@ -187,7 +188,7 @@ def plot_stacked_bars(name_list, name_map, ax, data_arr, labels, bar_labels, tit
     
     # Make DESPOT labels bold
     for tick_label in ax.get_xticklabels():
-        if 'DESPOT' in tick_label.get_text():
+        if tick_label.get_text() in ['DESPOT']:
             tick_label.set_fontweight('bold')
 
     ax.set_ylim(0, 1.05)
@@ -245,6 +246,9 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     for i, score in enumerate(score_names):
         rank_values = spearman_arr[i, :]
         rank_dict[score] = bca_mean_ci(rank_values)
+
+    print(f'Score dict: {score_dict}')
+    print(f'Rank dict: {rank_dict}')
     
     # Compute EF statistics for 1%, 2%, 5%
     ef_dicts = []
@@ -353,13 +357,13 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     plot_ci_horizontal(name_map, ax_pearson, score_dict, methods_pearson, groups_pearson,
                        xlabel='Pearson correlation (90% CI)', stat_key='estimate')
     ax_pearson.set_title('(A) Scoring power', loc='left', fontweight='bold', fontsize=9)
-    ax_pearson.set_xlim(0.0, 1.0)
+#    ax_pearson.set_xlim(0.0, 1.0)
     
     # Row 1: Spearman correlation
     plot_ci_horizontal(name_map, ax_spearman, rank_dict, methods_spearman, groups_spearman,
                        xlabel='Mean Spearman ρ (90% CI)', stat_key='mean')
     ax_spearman.set_title('(B) Ranking power', loc='left', fontweight='bold', fontsize=9)
-    ax_spearman.set_xlim(0.0, 1.0)
+#    ax_spearman.set_xlim(0.0, 1.0)
     
     # Row 2: Docking success rate
     docking_labels = ['Top-1', 'Top-2', 'Top-3']
@@ -388,7 +392,7 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
 
     # Make DESPOT labels bold
     for tick_label in ax_heatmap.get_yticklabels():
-        if 'DESPOT' in tick_label.get_text():
+        if tick_label.get_text() in ['DESPOT']:
             tick_label.set_fontweight('bold')
 
     # Color heatmap labels by scoring function category
@@ -448,12 +452,12 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     plt.subplots_adjust(left=0.12, right=0.95, top=0.97, bottom=0.07)
     
     # Save figure
-    fig.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    fig.savefig(output_path, dpi=600, bbox_inches='tight', facecolor='white')
     print(f"Figure saved to: {output_path}")
     
     # Also save as PNG for quick viewing
     png_path = output_path.replace('.pdf', '.png')
-    fig.savefig(png_path, dpi=300, bbox_inches='tight', facecolor='white')
+    fig.savefig(png_path, dpi=600, bbox_inches='tight', facecolor='white')
     print(f"PNG version saved to: {png_path}")
     
     plt.close(fig)
