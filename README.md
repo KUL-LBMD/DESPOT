@@ -9,7 +9,7 @@ DESPOT is an anisotropic knowledge-based potential for scoring protein–ligand 
 ### 1. Clone and set up the environment
 
 ```bash
-git clone https://github.com/robin-poelmans/DESPOT.git
+git clone https://github.com/KUL-LBMD/DESPOT.git
 cd DESPOT
 conda env create -f environment.yml
 conda activate DESPOT
