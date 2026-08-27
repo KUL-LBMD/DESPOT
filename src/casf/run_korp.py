@@ -9,7 +9,7 @@ import os
 from joblib import Parallel, delayed
 import math
 
-def run_scoring(database):
+def run_scoring_korp(database):
 	scorer1 = KORP_Scorer(mode = 'korp', database = database) # DESPOT
      
 	converter = MolConverter()
@@ -40,7 +40,7 @@ def run_scoring(database):
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/korp_{database.lower()}_scorepower.csv', index = False, float_format = '%.4f')
 	
-def run_docking(database):
+def run_docking_korp(database):
 	scorer1 = KORP_Scorer(mode = 'korp', database = database) # DESPOT
 
 	converter = MolConverter()
@@ -88,7 +88,7 @@ def run_docking(database):
 
 	df1.to_csv(f'{DATA_DIR}/CASF-2016/benchmark_results/korp_{database.lower()}_dockingpower.csv', index = False, float_format = '%.4f')
 	
-def run_screening(n_jobs=-1, database = 'CROWN'):
+def run_screening_korp(n_jobs=-1, database = 'CROWN'):
     print('Starting screening benchmark')
     molecule_list = [f'{subdir}_{i+1}' for subdir in sorted(os.listdir(DATA_DIR / 'CASF-2016' / 'coreset')) for i in range(100)]
     target_list = sorted(os.listdir(DATA_DIR / 'CASF-2016' / 'decoys_screening'))

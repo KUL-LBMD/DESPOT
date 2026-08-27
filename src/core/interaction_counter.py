@@ -183,6 +183,11 @@ class DESPOT_Counter:
 
                     if not np.isnan(v2[0]):
                         cos_theta = np.abs(np.dot(int_vector, v1) / np.linalg.norm(int_vector))
+
+                        if np.isnan(cos_theta):
+                            print(f'v1: {v1} - int_vector: {int_vector}')
+                            continue
+
                         theta = np.degrees(np.arccos(np.clip(cos_theta, 0.0, 1.0)))
                         theta = np.clip(theta, 0.01, 89.99)
                         theta_idx = int(theta / 3)
@@ -192,25 +197,6 @@ class DESPOT_Counter:
                         phi_idx = int(phi / 3)
 
                         self.bin_arr_3d[p_idx, l_idx, r_idx, theta_idx, phi_idx] += 1
-
-    def find_interactions(self):
-
-        num_files = len(self.file_list)
-
-        for i, file in enumerate(self.file_list):
-            filename, prot_df, lig_df = _convert_file(file, self.database)
-
-            self._process_interaction_pair(prot_df, lig_df)
-            self._process_interaction_pair(lig_df, prot_df)
-
-            print(f'{i} / {num_files} done')
-
-        np.savez_compressed(
-            DATA_DIR / 'potentials' / f'despot_counts_{self.database.lower()}.npz',
-            arr_1d=self.bin_arr_1d,
-            arr_2d=self.bin_arr_2d,
-            arr_3d=self.bin_arr_3d
-        )
 
     def find_interactions_parallel(self, n_workers=32, max_queued=64):
         """

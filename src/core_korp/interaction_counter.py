@@ -120,27 +120,6 @@ class KORP_Counter:
 
                     self.bin_arr[p_idx, l_idx, r_idx, theta_idx, phi_idx] += 1
 
-    
-    def find_interactions(self):
-
-        num_files = len(self.file_list)
-
-        for i, file in enumerate(self.file_list):
-            filename, prot_df, lig_df = _convert_file(file, self.database)
-
-            print(filename)
-            print(prot_df)
-            print(lig_df)
-
-            self._process_interaction_pair(prot_df, lig_df)
-
-            print(f'{i} / {num_files} done')
-
-        np.savez_compressed(
-            DATA_DIR / 'potentials' / f'korp_counts_{self.database.lower()}.npz',
-            counts = self.bin_arr
-        )
-
     def find_interactions_parallel(self, n_workers=32, max_queued=64):
         """
         Loop over all files with parallel MOL2 conversion feeding a processing queue.

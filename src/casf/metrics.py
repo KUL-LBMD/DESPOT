@@ -1,5 +1,4 @@
 from src.config import DATA_DIR
-from src.casf.erc import add_erc_columns
 
 import numpy as np
 import pandas as pd
@@ -82,14 +81,6 @@ def get_docking_values(name_list, erc_config=None):
 
     # --- ERC consensus scores (per-target ranking for docking) ---
     extended = list(name_list)
-    if erc_config:
-        erc_names = add_erc_columns(
-            merged_df,
-            partner_combos=erc_config['partner_combos'],
-            group_col='pdb_id',            # rank poses within each target
-            sigma_frac=erc_config.get('sigma_frac', 0.05),
-        )
-        extended += erc_names
 
     # --- compute metrics ---
     S = len(extended)
@@ -170,14 +161,6 @@ def get_screening_values(name_list, erc_config=None):
 
     # --- ERC consensus scores (per-target ranking for forward screening) ---
     extended = list(name_list)
-    if erc_config:
-        erc_names = add_erc_columns(
-            merged_df,
-            partner_combos=erc_config['partner_combos'],
-            group_col='pdb_id',            # rank ligands within each target
-            sigma_frac=erc_config.get('sigma_frac', 0.05),
-        )
-        extended += erc_names
 
     # --- compute metrics ---
     S = len(extended)
@@ -198,24 +181,14 @@ def get_screening_values(name_list, erc_config=None):
             real_idx = subset_sorted['is_binder'].idxmax()
             real_pos = (real_idx + 1) / len(subset_sorted)
 
-            if real_pos < 0.05:
+            if real_pos < 0.1:
                 forward_top_arr[i, 2] += 1 / n_proteins
-            if real_pos < 0.02:
+            if real_pos < 0.05:
                 forward_top_arr[i, 1] += 1 / n_proteins
-            if real_pos < 0.01:
+            if real_pos < 0.02:
                 forward_top_arr[i, 0] += 1 / n_proteins
 
     # Reverse screening
-
-    # --- ERC consensus scores (per-ligand ranking for reverse screening) ---
-    if erc_config:
-        erc_names = add_erc_columns(
-            merged_df,
-            partner_combos=erc_config['partner_combos'],
-            group_col='pdb_id',            # rank ligands within each target
-            sigma_frac=erc_config.get('sigma_frac', 0.05),
-        )
-
     unique_ligands = merged_df['ligand_id'].unique()
     n_ligands = len(unique_ligands)
 
@@ -247,7 +220,7 @@ def get_enrichment_factors(df, name_list):
     (including ERC names) if ERC columns are present in df.
     """
 
-    threshold_list = [0.01, 0.02, 0.05]
+    threshold_list = [0.02, 0.05, 0.1]
     unique_proteins = df['pdb_id'].unique()
     num_groups = len(unique_proteins)
     S = len(name_list)

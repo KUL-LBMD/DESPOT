@@ -7,7 +7,8 @@ with DeltaVina, GlideScore, ChemPLP, and AutoDockVina.
 """
 
 from src.config import DATA_DIR
-from src.casf.run_despot import run_scoring, run_docking, run_screening
+from src.casf.run_despot import run_scoring_despot, run_docking_despot, run_screening_despot
+from src.casf.run_korp import run_scoring_korp, run_docking_korp, run_screening_korp
 from src.casf.metrics import (
     get_scoring_values, get_ranking_values, get_docking_values,
     get_screening_values, get_enrichment_factors,
@@ -24,18 +25,21 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown_xtal', 'korp_crown_train', 'drugscore_crown_train',
-    'dsx', 'asp', 'autodockvina', 'drugscore_csd', 
+    'despot_crown', 'drugscore_crown', 'korp_crown', 'despot_combo_crown',
+    'dsx', 'asp', 'autodockvina', 'drugscore_csd', 'korp_pl',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
-    'chemplp', 'gbvi_wsa', 'deltavina', 'korp_pl'
-    
+    'chemplp', 'gbvi_wsa',
+    'deltavina',
+    'gnina_cnnscore', 'gnina_cnnaff', 'gnina_cnnvs'
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT', 'KORP-PL (CROWN)', 'DRUGSCORE (CROWN)',
-    'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
-    'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04',
-    'ChemScore', 'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20', 'KORP-PL'
+    'DESPOT', 'DESPOT-iso', 'DESPOT-screen', 'DESPOT-combo',
+    'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD', 'KORP-PL',
+    'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04', 'ChemScore', 
+    'ChemPLP', 'GBVI-WSA-dG',
+    'ΔVinaRF20',
+    'GNINA-score', 'GNINA-affinity', 'GNINA-screening'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
@@ -59,7 +63,10 @@ SCORE_CATEGORY = {
     'ChemPLP': 'empirical',
     'GBVI-WSA-dG': 'physical',
     'ΔVinaRF20': 'empirical',
-    'KORP-PL': 'kbp'
+    'KORP-PL': 'kbp',
+    'GNINA-score': 'empirical',
+    'GNINA-affinity': 'empirical',
+    'GNINA-screening': 'empirical'
 }
 
 # ============================================================================
@@ -97,45 +104,31 @@ Z_NAMES_CLEAN = [
     for p in Z_PARTNERS
 ]
 
-if __name__ == '__main__':
+### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
+score_df, score_names_ext = get_scoring_values(NAME_LIST, z_config = None)
+rank_spearman_arr = get_ranking_values(NAME_LIST, z_config = None)
+dock_top_arr, dock_spearman_thresholds, dock_names_ext = get_docking_values(NAME_LIST, erc_config=ERC_CONFIG)
+screen_df, forward_top_arr, reverse_top_arr, screen_names_ext = get_screening_values(NAME_LIST, erc_config=ERC_CONFIG)
+ef_arr = get_enrichment_factors(screen_df, screen_names_ext)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--database', type=str, required=True, choices=['CROWN_train', 'CROWN_xtal', 'CROWN_leaky', 'PDBBind', 'HiQBind'], default = 'CROWN_train', help = 'Data source to use')
-    args = parser.parse_args()
+### Step 3: Compute and plot statistics ###
 
-    DATABASE = args.database
-
-    ### Step 1: run DESPOT on all CASF entries and store data ###
-#    run_scoring(DATABASE)
- #   run_docking(DATABASE)
-  #  run_screening(n_jobs=8, database = DATABASE)
-
-    ### Step 2: Get benchmark metrics (with ERC for docking & screening) ###
-
-    score_df, score_names_ext = get_scoring_values(NAME_LIST, z_config = None)
-    rank_spearman_arr = get_ranking_values(NAME_LIST, z_config = None)
-    dock_top_arr, dock_spearman_thresholds, dock_names_ext = get_docking_values(NAME_LIST, erc_config=ERC_CONFIG)
-    screen_df, forward_top_arr, reverse_top_arr, screen_names_ext = get_screening_values(NAME_LIST, erc_config=ERC_CONFIG)
-    ef_arr = get_enrichment_factors(screen_df, screen_names_ext)
-
-    ### Step 3: Compute and plot statistics ###
-
-    # Scoring & ranking use the original name lists (no ERC).
-    # Docking, screening & enrichment use the extended lists.
-    generate_combined_figure(
-        'casf_combined.pdf',
-        # scoring / ranking (rows 1-2 left panels)
-        score_name_list = NAME_LIST,
-        score_name_list_clean=NAME_LIST_CLEAN,
-        score_df=score_df,
-        spearman_arr=rank_spearman_arr,
-        # docking (row 2)
-        dock_name_list=dock_names_ext,
-        dock_name_list_clean=NAME_LIST_CLEAN + ERC_NAMES_CLEAN,
-        dock_top_arr=dock_top_arr,
-        dock_spearman_thresholds=dock_spearman_thresholds,
-        # screening & enrichment (rows 3-4)
-        forward_top_arr=forward_top_arr,
-        reverse_top_arr=reverse_top_arr,
-        ef_arr=ef_arr,
-    )
+# Scoring & ranking use the original name lists (no ERC).
+# Docking, screening & enrichment use the extended lists.
+generate_combined_figure(
+    'casf_combined.pdf',
+    # scoring / ranking (rows 1-2 left panels)
+    score_name_list = NAME_LIST,
+    score_name_list_clean=NAME_LIST_CLEAN,
+    score_df=score_df,
+    spearman_arr=rank_spearman_arr,
+    # docking (row 2)
+    dock_name_list=dock_names_ext,
+    dock_name_list_clean=NAME_LIST_CLEAN + ERC_NAMES_CLEAN,
+    dock_top_arr=dock_top_arr,
+    dock_spearman_thresholds=dock_spearman_thresholds,
+    # screening & enrichment (rows 3-4)
+    forward_top_arr=forward_top_arr,
+    reverse_top_arr=reverse_top_arr,
+    ef_arr=ef_arr,
+)
