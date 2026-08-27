@@ -163,7 +163,7 @@ class ProtTyper:
 
         return res_types, coords_arr, v1_arr, v2_arr, v3_arr
 
-class MolConverter:
+class KorpMolConverter:
     """
     High-level converter for MOL2 files to typed CSV.
     

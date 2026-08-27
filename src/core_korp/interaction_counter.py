@@ -7,12 +7,12 @@ from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from tqdm import tqdm
 
 from src.config import DATA_DIR
-from src.atom_typing_korp.parse_mol2 import MolConverter
+from src.atom_typing_korp.parse_mol2 import KorpMolConverter
 from src.atom_typing_korp.geometry import unit_vector
 
 def _convert_file(filename, database):
     """Convert a single protein-ligand pair. Runs in worker process."""
-    converter = MolConverter()
+    converter = KorpMolConverter()
 
     prot_df = converter.convert_receptor(
         DATA_DIR / database / 'processed_mol2' / 'receptor' / filename
@@ -31,7 +31,7 @@ class KORP_Counter:
     def __init__(self, database):
 
         self.database = database
-        self.converter = MolConverter()
+        self.converter = KorpMolConverter()
 
         with open(DATA_DIR / 'metadata' / 'casf_pdb_ids.txt', 'r') as f:
             casf_ids = [line.strip() for line in f]
