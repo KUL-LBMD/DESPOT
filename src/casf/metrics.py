@@ -181,11 +181,11 @@ def get_screening_values(name_list, erc_config=None):
             real_idx = subset_sorted['is_binder'].idxmax()
             real_pos = (real_idx + 1) / len(subset_sorted)
 
-            if real_pos < 0.05:
+            if real_pos < 0.1:
                 forward_top_arr[i, 2] += 1 / n_proteins
-            if real_pos < 0.02:
+            if real_pos < 0.05:
                 forward_top_arr[i, 1] += 1 / n_proteins
-            if real_pos < 0.01:
+            if real_pos < 0.02:
                 forward_top_arr[i, 0] += 1 / n_proteins
 
     # Reverse screening
@@ -220,7 +220,7 @@ def get_enrichment_factors(df, name_list):
     (including ERC names) if ERC columns are present in df.
     """
 
-    threshold_list = [0.01, 0.02, 0.05]
+    threshold_list = [0.02, 0.05, 0.1]
     unique_proteins = df['pdb_id'].unique()
     num_groups = len(unique_proteins)
     S = len(name_list)

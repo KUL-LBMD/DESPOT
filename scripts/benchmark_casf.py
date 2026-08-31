@@ -1,9 +1,6 @@
 """
 This script runs the 3 DESPOT variants on CASF-2016, and computes and plots the statistics
 (with comparison against some competitors).
-
-ERC (Exponential Rank Consensus) combinations are computed for DESPOT paired
-with DeltaVina, GlideScore, ChemPLP, and AutoDockVina.
 """
 
 from src.config import DATA_DIR
@@ -25,19 +22,21 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_hiqbind', 'drugscore_hiqbind', 'korp_hiqbind',
-    'despot_crown', 'drugscore_crown', 'korp_crown',
-    'dsx', 'asp', 'autodockvina', 'drugscore_csd', 
+    'despot_crown', 'drugscore_crown', 'korp_crown', 'despot_combo_crown',
+    'dsx', 'asp', 'autodockvina', 'drugscore_csd', 'korp_pl',
     'drugscore2018', 'glide', 'gold', 'pmf', 'chemscore',
-    'chemplp', 'gbvi_wsa', 'deltavina'
+    'chemplp', 'gbvi_wsa',
+    'deltavina',
+    'gnina_cnnscore', 'gnina_cnnaff', 'gnina_cnnvs'
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT-HIQBind', 'DRUGSCORE-HIQBind', 'KORP-HIQBind',
-    'DESPOT-CROWN', 'DRUGSCORE-CROWN', 'KORP-CROWN',
-    'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD',
+    'DESPOT', 'DESPOT-iso', 'DESPOT-screen', 'DESPOT-combo',
+    'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD', 'KORP-PL',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04', 'ChemScore', 
-    'ChemPLP', 'GBVI-WSA-dG', 'ΔVinaRF20'
+    'ChemPLP', 'GBVI-WSA-dG',
+    'ΔVinaRF20*',
+    'GNINA-score*', 'GNINA-affinity*', 'GNINA-screening*'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
@@ -61,8 +60,10 @@ SCORE_CATEGORY = {
     'ChemPLP': 'empirical',
     'GBVI-WSA-dG': 'physical',
     'ΔVinaRF20': 'empirical',
-    'KORP-PL': 'kbp'
-}
+    'KORP-PL': 'kbp',
+    'GNINA-score': 'empirical',
+    'GNINA-affinity': 'empirical',
+    'GNINA-screening': 'empirical'
 
 # ============================================================================
 # ERC configuration
@@ -99,7 +100,7 @@ Z_NAMES_CLEAN = [
     for p in Z_PARTNERS
 ]
 
-for database in ['CROWN', 'HiQBind']:
+for database in ['CROWN', 'HiQBind', 'CROWN_xtal', 'HiQBind_xtal']:
 
     ### Step 1: run DESPOT on all CASF entries and store data ###
     run_scoring_despot(database)

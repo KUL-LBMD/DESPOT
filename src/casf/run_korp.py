@@ -1,5 +1,5 @@
 from src.config import DATA_DIR
-from src.atom_typing_korp.parse_mol2 import MolConverter
+from src.atom_typing_korp.parse_mol2 import KorpMolConverter
 from src.core_korp.complex_scorer import KORP_Scorer
 
 import numpy as np
@@ -12,7 +12,7 @@ import math
 def run_scoring_korp(database):
 	scorer1 = KORP_Scorer(mode = 'korp', database = database) # DESPOT
      
-	converter = MolConverter()
+	converter = KorpMolConverter()
 
 	# 1.1-1.2: Scoring + ranking power
 	print('Starting scoring benchmark')
@@ -43,7 +43,7 @@ def run_scoring_korp(database):
 def run_docking_korp(database):
 	scorer1 = KORP_Scorer(mode = 'korp', database = database) # DESPOT
 
-	converter = MolConverter()
+	converter = KorpMolConverter()
 
 	print('Starting docking benchmark')
 
@@ -99,7 +99,7 @@ def run_screening_korp(n_jobs=-1, database = 'CROWN'):
         """Process a single target protein against all molecules."""
         scorer1 = KORP_Scorer(mode = 'korp', database = database) # DESPOT
         
-        converter = MolConverter()
+        converter = KorpMolConverter()
 
         prot_df = converter.convert_receptor(f'{DATA_DIR}/CASF-2016/coreset/{subdir}/{subdir}_protein.mol2')
         num_chunks = math.ceil(len(molecule_list) / chunk_size)

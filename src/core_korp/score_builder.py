@@ -21,9 +21,12 @@ class KORP_Builder:
         lig_df = pd.read_csv(DATA_DIR / 'metadata' / 'lig_types.csv')
         self.lig_types_list = lig_df['atom_type'].tolist()
 
-        self.r_bins = np.arange(2.0, 11.1, 0.1)
-        self.theta_bins = np.deg2rad(np.arange(0, 183.0, 3.0))
-        self.phi_bins = np.deg2rad(np.arange(0, 363.0, 3.0))
+        self.r_step = 0.2
+        self.theta_step = 6.0
+
+        self.r_bins = np.arange(2.0, 11.1, self.r_step)
+        self.theta_bins = np.deg2rad(np.arange(0, 183.0, self.theta_step))
+        self.phi_bins = np.deg2rad(np.arange(0, 363.0, self.theta_step))
 
         self.sigma_r = 2
         self.sigma_angle = 0.1

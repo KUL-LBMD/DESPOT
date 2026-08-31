@@ -48,15 +48,17 @@ plt.rcParams.update({
 })
 
 CATEGORY_COLORS = {
-    'empirical': '#D55E00',   # Vermillion (Okabe-Ito)
+    'kbp': '#D55E00',   # Vermillion (Okabe-Ito)
     'physical': '#0072B2',    # Blue (Okabe-Ito)
-    'kbp': '#009E73',         # Bluish green (Okabe-Ito)
+    'empirical': '#009E73',         # Bluish green (Okabe-Ito)
+    'ml': 'gray'
 }
 
 CATEGORY_LABELS = {
     'empirical': 'Empirical',
     'physical': 'Physics-based',
-    'kbp': 'Knowledge-based potential',
+    'kbp': 'Knowledge-based',
+    'ml': 'Machine-learning*'
 }
 
 SCORE_CATEGORY = {
@@ -71,8 +73,11 @@ SCORE_CATEGORY = {
     'ChemScore': 'empirical',
     'ChemPLP': 'empirical',
     'GBVI-WSA-dG': 'physical',
-    'ΔVinaRF20': 'empirical',
-    'KORP-PL': 'kbp'
+    'ΔVinaRF20*': 'ml',
+    'KORP-PL': 'kbp',
+    'GNINA-score*': 'ml',
+    'GNINA-affinity*': 'ml',
+    'GNINA-screening*': 'ml'
 }
 
 # ============================================================================
@@ -142,9 +147,9 @@ def plot_ci_horizontal(name_map, ax, stats_dict, methods_sorted, groups, xlabel,
         ax.set_yticklabels(methods_sorted)
 
     # Make DESPOT labels bold
-    for tick_label in ax.get_yticklabels():
-        if tick_label.get_text() in ['DESPOT']:
-            tick_label.set_fontweight('bold')
+#    for tick_label in ax.get_yticklabels():
+ #       if 'DESPOT' in tick_label.get_text():
+  #          tick_label.set_fontweight('bold')
 
     ax.invert_yaxis()
     ax.set_xlabel(xlabel)
@@ -187,9 +192,9 @@ def plot_stacked_bars(name_list, name_map, ax, data_arr, labels, bar_labels, tit
                        rotation=45, ha='right')
     
     # Make DESPOT labels bold
-    for tick_label in ax.get_xticklabels():
-        if tick_label.get_text() in ['DESPOT']:
-            tick_label.set_fontweight('bold')
+   # for tick_label in ax.get_xticklabels():
+    #    if 'DESPOT' in tick_label.get_text():
+     #       tick_label.set_fontweight('bold')
 
     ax.set_ylim(0, 1.05)
     ax.set_title(title, fontweight='medium', pad=8)
@@ -356,22 +361,22 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     # Row 1: Pearson correlation
     plot_ci_horizontal(name_map, ax_pearson, score_dict, methods_pearson, groups_pearson,
                        xlabel='Pearson correlation (90% CI)', stat_key='estimate')
-    ax_pearson.set_title('(A) Scoring power', loc='left', fontweight='bold', fontsize=9)
-#    ax_pearson.set_xlim(0.0, 1.0)
+    ax_pearson.set_title('a) Scoring power', loc='left', fontweight='bold', fontsize=9)
+    ax_pearson.set_xlim(0.0, 1.0)
     
     # Row 1: Spearman correlation
     plot_ci_horizontal(name_map, ax_spearman, rank_dict, methods_spearman, groups_spearman,
                        xlabel='Mean Spearman ρ (90% CI)', stat_key='mean')
-    ax_spearman.set_title('(B) Ranking power', loc='left', fontweight='bold', fontsize=9)
-#    ax_spearman.set_xlim(0.0, 1.0)
+    ax_spearman.set_title('b) Ranking power', loc='left', fontweight='bold', fontsize=9)
+    ax_spearman.set_xlim(0.0, 1.0)
     
     # Row 2: Docking success rate
     docking_labels = ['Top-1', 'Top-2', 'Top-3']
     plot_stacked_bars(dock_name_list, name_map_ext, ax_docking, dock_top_arr, score_names_ext, docking_labels,
                       title='', ylabel='Success rate', show_legend=True,
                       legend_title='Recovery')
-    ax_docking.set_title('(C) Docking power', loc='left', fontweight='bold', fontsize=9)
-    ax_docking.set_ylim(0.4, 1.0)
+    ax_docking.set_title('c) Docking power', loc='left', fontweight='bold', fontsize=9)
+    ax_docking.set_ylim(0.0, 1.0)
 
     # Row 2: Binding funnel heatmap
     threshold_list = list(range(2, 11))
@@ -391,9 +396,9 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     ax_heatmap.set_yticklabels(ax_heatmap.get_yticklabels(), rotation=0)
 
     # Make DESPOT labels bold
-    for tick_label in ax_heatmap.get_yticklabels():
-        if tick_label.get_text() in ['DESPOT']:
-            tick_label.set_fontweight('bold')
+    #for tick_label in ax_heatmap.get_yticklabels():
+     #   if 'DESPOT' in tick_label.get_text():
+      #      tick_label.set_fontweight('bold')
 
     # Color heatmap labels by scoring function category
     for tick_label in ax_heatmap.get_yticklabels():
@@ -403,26 +408,28 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
             tick_label.set_color(CATEGORY_COLORS[cat])
 
     ax_heatmap.set_xlabel('RMSD threshold (Å)')
-    ax_heatmap.set_title('(D) Binding funnel', loc='left', fontweight='bold', fontsize=9)
+    ax_heatmap.set_title('d) Binding funnel', loc='left', fontweight='bold', fontsize=9)
     
     # Row 3: Forward screening
-    forward_labels = ['Top 1%', 'Top 2%', 'Top 5%']
+    forward_labels = ['Top 2%', 'Top 5%', 'Top 10%']
     plot_stacked_bars(dock_name_list, name_map_ext, ax_forward, forward_top_arr, score_names_ext, forward_labels,
                       title='', ylabel='Success rate', show_legend=False)
-    ax_forward.set_title('(E) Forward screening', loc='left', fontweight='bold', fontsize=9)
+    ax_forward.set_title('e) Forward screening', loc='left', fontweight='bold', fontsize=9)
+    ax_forward.set_ylim(0.0, 1.0)
 
     # Row 3: Reverse screening
     reverse_labels = ['Top 2%', 'Top 5%', 'Top 10%']
     handles, labels = plot_stacked_bars(dock_name_list, name_map_ext, ax_reverse, reverse_top_arr, score_names_ext, 
                                          reverse_labels, title='', ylabel = 'Success rate', show_legend=False)
-    ax_reverse.set_title('(F) Reverse screening', loc='left', fontweight='bold', fontsize=9)
+    ax_reverse.set_title('f) Reverse screening', loc='left', fontweight='bold', fontsize=9)
+    ax_reverse.set_ylim(0.0, 1.0)
     
     # Add shared legend for screening plots
     ax_forward.legend(title='Cutoff', loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 8})
     ax_reverse.legend(title='Cutoff', loc='upper left', framealpha=0.9, edgecolor='none', bbox_to_anchor=(1.0, 1.05), title_fontproperties={'weight': 'bold', 'size': 8})
     
     # Row 4: Enrichment factors
-    ef_titles = ['(G) EF @ 1%', '(H) EF @ 2%', '(I) EF @ 5%']
+    ef_titles = ['g) EF @ 2%', 'h) EF @ 5%', 'i) EF @ 10%']
     ef_axes = [ax_ef1, ax_ef2, ax_ef5]
     
     for idx, (ax, (methods, groups), ef_dict, title) in enumerate(
@@ -439,11 +446,12 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     # Add figure-level legend for scoring function categories
     from matplotlib.patches import Patch
     category_handles = [
-        Patch(facecolor=CATEGORY_COLORS['empirical'], label=CATEGORY_LABELS['empirical']),
-        Patch(facecolor=CATEGORY_COLORS['physical'], label=CATEGORY_LABELS['physical']),
         Patch(facecolor=CATEGORY_COLORS['kbp'], label=CATEGORY_LABELS['kbp']),
+        Patch(facecolor=CATEGORY_COLORS['physical'], label=CATEGORY_LABELS['physical']),
+        Patch(facecolor=CATEGORY_COLORS['empirical'], label=CATEGORY_LABELS['empirical']),
+        Patch(facecolor=CATEGORY_COLORS['ml'], label=CATEGORY_LABELS['ml'])
     ]
-    fig.legend(handles=category_handles, loc='lower center', ncol=3,
+    fig.legend(handles=category_handles, loc='lower center', ncol=4,
                frameon=True, framealpha=0.9, edgecolor='none',
                fontsize=7, bbox_to_anchor=(0.5, -0.025),
                title='Scoring function type', title_fontproperties={'weight': 'bold', 'size': 8})

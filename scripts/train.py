@@ -9,7 +9,7 @@ os.makedirs(f'{DATA_DIR}/potentials', exist_ok = True)
 
 if __name__ == '__main__':
 	# Train models on both datasets
-	for database in ['CROWN', 'HiQBind']:
+	for database in ['CROWN', 'CROWN_xtal', 'HiQBind', 'HiQBind_xtal']:
 
 		### Step 1: bin interactions ###
 		# DESPOT
@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
 		# KORP
 		counter = KORP_Counter(database)
-		counter.find_interactions_parallel()
+		counter.find_interactions_parallel(n_workers = 8)
 
 		### Step 2: build potentials ###
 		print('Building DESPOT')
