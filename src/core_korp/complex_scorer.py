@@ -201,8 +201,8 @@ class KORP_Scorer:
 
         # Grid parameters
         self.r_min = np.float32(2.0)
-        self.r_step = np.float32(0.1)
-        self.angular_step = np.float32(np.deg2rad(3.0))
+        self.r_step = np.float32(0.2)
+        self.angular_step = np.float32(np.deg2rad(6.0))
         
         self.n_r = self.scores.shape[2]
         self.n_theta = self.scores.shape[3]

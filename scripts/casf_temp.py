@@ -25,11 +25,13 @@ import argparse
 # ============================================================================
 
 NAME_LIST = [
-    'despot_crown', 'despot_hiqbind', 'korp_crown', 'korp_hiqbind', 'drugscore_crown', 'drugscore_hiqbind', 'despot_combo_crown', 'despot_combo_hiqbind'
+    'despot_crown', 'despot_hiqbind_xtal', 'korp_crown', 'korp_hiqbind_xtal', 'drugscore_crown', 'drugscore_hiqbind_xtal',
+    'despot_crown_xtal', 'korp_crown_xtal', 'drugscore_crown_xtal'
 ]
 
 NAME_LIST_CLEAN = [
-    'DESPOT (C)', 'DESPOT (H)', 'DESPOT-screen (C)', 'DESPOT-screen (H)', 'DESPOT-iso (C)', 'DESPOT-iso (H)', 'DESPOT-combo (C)', 'DESPOT-combo (H)'
+    'DESPOT (C)', 'DESPOT (H)', 'DESPOT-screen (C)', 'DESPOT-screen (H)', 'DESPOT-iso (C)', 'DESPOT-iso (H)',
+    'DESPOT (C-xtal)', 'DESPOT-screen (C-xtal)', 'DESPOT-iso (C-xtal)'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}

@@ -48,15 +48,17 @@ plt.rcParams.update({
 })
 
 CATEGORY_COLORS = {
-    'empirical': '#D55E00',   # Vermillion (Okabe-Ito)
+    'kbp': '#D55E00',   # Vermillion (Okabe-Ito)
     'physical': '#0072B2',    # Blue (Okabe-Ito)
-    'kbp': '#009E73',         # Bluish green (Okabe-Ito)
+    'empirical': '#009E73',         # Bluish green (Okabe-Ito)
+    'ml': 'gray'
 }
 
 CATEGORY_LABELS = {
     'empirical': 'Empirical',
     'physical': 'Physics-based',
-    'kbp': 'Knowledge-based potential',
+    'kbp': 'Knowledge-based',
+    'ml': 'Machine-learning*'
 }
 
 SCORE_CATEGORY = {
@@ -71,11 +73,11 @@ SCORE_CATEGORY = {
     'ChemScore': 'empirical',
     'ChemPLP': 'empirical',
     'GBVI-WSA-dG': 'physical',
-    'ΔVinaRF20': 'empirical',
+    'ΔVinaRF20*': 'ml',
     'KORP-PL': 'kbp',
-    'GNINA-score': 'empirical',
-    'GNINA-affinity': 'empirical',
-    'GNINA-screening': 'empirical'
+    'GNINA-score*': 'ml',
+    'GNINA-affinity*': 'ml',
+    'GNINA-screening*': 'ml'
 }
 
 # ============================================================================
@@ -145,9 +147,9 @@ def plot_ci_horizontal(name_map, ax, stats_dict, methods_sorted, groups, xlabel,
         ax.set_yticklabels(methods_sorted)
 
     # Make DESPOT labels bold
-    for tick_label in ax.get_yticklabels():
-        if 'DESPOT' in tick_label.get_text():
-            tick_label.set_fontweight('bold')
+#    for tick_label in ax.get_yticklabels():
+ #       if 'DESPOT' in tick_label.get_text():
+  #          tick_label.set_fontweight('bold')
 
     ax.invert_yaxis()
     ax.set_xlabel(xlabel)
@@ -190,9 +192,9 @@ def plot_stacked_bars(name_list, name_map, ax, data_arr, labels, bar_labels, tit
                        rotation=45, ha='right')
     
     # Make DESPOT labels bold
-    for tick_label in ax.get_xticklabels():
-        if 'DESPOT' in tick_label.get_text():
-            tick_label.set_fontweight('bold')
+   # for tick_label in ax.get_xticklabels():
+    #    if 'DESPOT' in tick_label.get_text():
+     #       tick_label.set_fontweight('bold')
 
     ax.set_ylim(0, 1.05)
     ax.set_title(title, fontweight='medium', pad=8)
@@ -394,9 +396,9 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     ax_heatmap.set_yticklabels(ax_heatmap.get_yticklabels(), rotation=0)
 
     # Make DESPOT labels bold
-    for tick_label in ax_heatmap.get_yticklabels():
-        if 'DESPOT' in tick_label.get_text():
-            tick_label.set_fontweight('bold')
+    #for tick_label in ax_heatmap.get_yticklabels():
+     #   if 'DESPOT' in tick_label.get_text():
+      #      tick_label.set_fontweight('bold')
 
     # Color heatmap labels by scoring function category
     for tick_label in ax_heatmap.get_yticklabels():
@@ -444,11 +446,12 @@ def generate_combined_figure(output_path, score_name_list, score_name_list_clean
     # Add figure-level legend for scoring function categories
     from matplotlib.patches import Patch
     category_handles = [
-        Patch(facecolor=CATEGORY_COLORS['empirical'], label=CATEGORY_LABELS['empirical']),
-        Patch(facecolor=CATEGORY_COLORS['physical'], label=CATEGORY_LABELS['physical']),
         Patch(facecolor=CATEGORY_COLORS['kbp'], label=CATEGORY_LABELS['kbp']),
+        Patch(facecolor=CATEGORY_COLORS['physical'], label=CATEGORY_LABELS['physical']),
+        Patch(facecolor=CATEGORY_COLORS['empirical'], label=CATEGORY_LABELS['empirical']),
+        Patch(facecolor=CATEGORY_COLORS['ml'], label=CATEGORY_LABELS['ml'])
     ]
-    fig.legend(handles=category_handles, loc='lower center', ncol=3,
+    fig.legend(handles=category_handles, loc='lower center', ncol=4,
                frameon=True, framealpha=0.9, edgecolor='none',
                fontsize=7, bbox_to_anchor=(0.5, -0.025),
                title='Scoring function type', title_fontproperties={'weight': 'bold', 'size': 8})

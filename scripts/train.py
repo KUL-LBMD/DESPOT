@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
 		# KORP
 		counter = KORP_Counter(database)
-		counter.find_interactions_parallel()
+		counter.find_interactions_parallel(n_workers = 8)
 
 		### Step 2: build potentials ###
 		print('Building DESPOT')

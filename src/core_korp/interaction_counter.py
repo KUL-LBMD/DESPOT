@@ -33,14 +33,17 @@ class KORP_Counter:
         self.database = database
         self.converter = KorpMolConverter()
 
+        self.r_step = 0.2
+        self.theta_step = 6.0
+
         with open(DATA_DIR / 'metadata' / 'casf_pdb_ids.txt', 'r') as f:
             casf_ids = [line.strip() for line in f]
 
         self.file_list = [x for x in os.listdir(DATA_DIR / self.database / 'processed_mol2' / 'receptor') if not x[:4] in casf_ids]
 
-        self.r_bins = np.arange(2.0, 11.0, 0.1)
-        self.theta_bins = np.arange(0, 180.0, 3.0)
-        self.phi_bins = np.arange(0, 360.0, 3.0)
+        self.r_bins = np.arange(2.0, 11.0, self.r_step) # 8-fold memory decrease, use bigger jumps
+        self.theta_bins = np.arange(0, 180.0, self.theta_step)
+        self.phi_bins = np.arange(0, 360.0, self.theta_step)
 
         self.prot_types_list = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
                             'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
@@ -102,7 +105,7 @@ class KORP_Counter:
                 # Calculate interaction vector and discretize distance
                 int_vector = l_coord - p_coord
                 dist = np.clip(np.linalg.norm(int_vector), 0.01, 10.99)
-                r_idx = int(dist * 10) - 20
+                r_idx = int((dist - 2.0) / self.r_step)
 
                 int_norm = unit_vector(int_vector)
 
@@ -111,12 +114,12 @@ class KORP_Counter:
                     cos_theta = np.clip(int_norm @ v1, a_min = -1, a_max = 1)
                     theta = np.degrees(np.arccos(cos_theta)) # Range [0, 180]
                     theta = np.clip(theta, 0.01, 179.99)
-                    theta_idx = int(theta / 3)
+                    theta_idx = int(theta / self.theta_step)
 
                     phi = np.degrees(np.atan2(np.dot(int_norm, v3), np.dot(int_norm, v2))) # Range [-180, 180]
                     phi += 180 # Range [0, 360]
                     phi = np.clip(phi, 0.01, 359.99)
-                    phi_idx = int(phi / 3)
+                    phi_idx = int(phi / self.theta_step)
 
                     self.bin_arr[p_idx, l_idx, r_idx, theta_idx, phi_idx] += 1
 

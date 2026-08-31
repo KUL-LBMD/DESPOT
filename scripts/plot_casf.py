@@ -38,8 +38,8 @@ NAME_LIST_CLEAN = [
     'DrugScoreX', 'ASP', 'AutoDockVina', 'DrugScoreCSD', 'KORP-PL',
     'DrugScore2018', 'GlideScore-SP', 'GoldScore', 'PMF04', 'ChemScore', 
     'ChemPLP', 'GBVI-WSA-dG',
-    'ΔVinaRF20',
-    'GNINA-score', 'GNINA-affinity', 'GNINA-screening'
+    'ΔVinaRF20*',
+    'GNINA-score*', 'GNINA-affinity*', 'GNINA-screening*'
 ]
 
 NAME_MAP = {k: v for k, v in zip(NAME_LIST, NAME_LIST_CLEAN)}
