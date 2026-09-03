@@ -2,8 +2,8 @@
 #
 # download_data.sh — Download and extract the DESPOT dataset from Zenodo.
 #
-# Zenodo record: https://zenodo.org/records/20829559
-# DOI: 10.5281/zenodo.20829559
+# Zenodo record: https://zenodo.org/records/22234751
+# DOI: 10.5281/zenodo.22234751
 #
 # Run this from the ROOT of the DESPOT GitHub repository. It creates a data/
 # subdirectory, downloads the requested archives there, verifies their MD5
@@ -19,7 +19,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-RECORD_BASE="https://zenodo.org/records/20829559/files"
+RECORD_BASE="https://zenodo.org/records/22234751/files"
 DATA_DIR="data"
 
 # Essential archives (downloaded by default).
@@ -30,11 +30,11 @@ OPTIONAL=(casf_2016 crown_train hiqbind_train)
 
 # MD5 checksums from the Zenodo record (file name -> md5).
 declare -A MD5=(
-  [metadata.tar.gz]="376915d65ffba5e6fc203ce5d22ed7ad"
-  [potentials.tar.gz]="751b3634ddebbacd6c4a324ace7ebb3a"
-  [casf_2016.tar.gz]="b433ef3da03ae94731d9bd0b67df8138"
-  [crown_train.tar.gz]="c11adb95e319d8b4f1386c8f5e57ef49"
-  [hiqbind_train.tar.gz]="877719aa4d58a158e497f202767b8bd1"
+  [metadata.tar.gz]="5b66acd10fe47dc9a2da038f275b614a"
+  [potentials.tar.gz]="d95b5196a4cc0b5d95e2d55d87ef9d74"
+  [casf_2016.tar.gz]="2c774e65b3e1e4a2e0a5e7e467217f8d"
+  [crown_train.tar.gz]="712e75affa797af1c974cf7147ab070a"
+  [hiqbind_train.tar.gz]="597e0f688b54794eb284f08528a701f8"
 )
 
 # ---------------------------------------------------------------------------
@@ -48,10 +48,10 @@ Download and extract the DESPOT dataset from Zenodo into ./data/.
 
 Options:
   (no flag)    Download only the essential archives needed to run DESPOT:
-                 metadata.tar.gz (~12 MB) and potentials.tar.gz (~1.9 GB).
+                 metadata.tar.gz (~12 MB) and potentials.tar.gz (~2.6 GB).
   --all        Download all 5 archives, additionally including:
-                 casf_2016.tar.gz (~4.2 GB), crown_train.tar.gz (~12.5 GB),
-                 hiqbind_train.tar.gz (~5.0 GB). ~23.7 GB total download.
+                 casf_2016.tar.gz (~4.2 GB), crown_train.tar.gz (~20.3 GB),
+                 hiqbind_train.tar.gz (~5.0 GB). ~29.5 GB total download.
   -h, --help   Show this help message and exit.
 
 Run from the root of the DESPOT repository.
@@ -168,7 +168,7 @@ mkdir -p "$DATA_DIR"
 TARGETS=("${ESSENTIAL[@]}")
 if [[ "$MODE" == "all" ]]; then
   TARGETS+=("${OPTIONAL[@]}")
-  log "Mode: ALL — downloading all 5 archives (~23.7 GB)."
+  log "Mode: ALL — downloading all 5 archives (~29.5 GB)."
 else
   log "Mode: ESSENTIAL — downloading metadata + potentials only."
   log "(Use --all to also fetch casf_2016, crown_train, and hiqbind_train.)"
