@@ -26,8 +26,6 @@ def parse_arguments():
     parser.add_argument('--pocket', help = 'FPocket pqr file used for centroid estimation')
     parser.add_argument('--channel', help = 'Ligand channel used for voxel scoring')
     parser.add_argument('--output', help = 'Path to output pdb file')
-    parser.add_argument('--database', type=str, required=True, choices=['CROWN', 'HiQBind'], default = 'CROWN',
-		help = 'Data source to use')
     
     return parser.parse_args()
 
@@ -133,7 +131,7 @@ def build_pocket_df(centroid, lig_channel):
 if __name__ == '__main__':
     args = parse_arguments()
     converter = MolConverter()
-    scorer = DESPOT_Scorer(mode = 'despot', database = args.database)
+    scorer = DESPOT_Scorer(mode = 'despot', database = 'CROWN')
 	
     prot_df = converter.convert_mol2(args.protein)
     centroid = get_hull_centroid(args.pocket)
